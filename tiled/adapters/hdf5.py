@@ -13,6 +13,7 @@ import dask.array
 import h5py
 import hdf5plugin  # noqa: F401
 import numpy
+from dask.array.core import getter
 from dask.highlevelgraph import HighLevelGraph
 from numpy._typing import NDArray
 
@@ -146,6 +147,76 @@ class h5open(h5py.File):  # type: ignore
             elif "doesn't exist" in str(exc_value):
                 # Registered dataset (or group) is missing from the file
                 raise BrokenLink(exc_value.args[0]) from exc_value
+
+
+def _forward_selection(
+    key: Any, shape: tuple[int, ...]
+) -> tuple[Any, tuple[builtins.slice, ...] | None]:
+    """Rewrite a selection so h5py can read it, and return the flip to apply after
+
+    h5py reads forwards only, so a slice with a negative step is read as the
+    equivalent forward slice and reversed in memory. Integers, slices and Ellipsis
+    are handled; any other selection is returned unchanged.
+    """
+    key = key if isinstance(key, tuple) else (key,)
+    if not all(
+        k is Ellipsis or isinstance(k, (builtins.slice, int, numpy.integer))
+        for k in key
+    ):
+        return key, None
+    if Ellipsis in key:
+        i = key.index(Ellipsis)
+        fill = (builtins.slice(None),) * (len(shape) - len(key) + 1)
+        key = key[:i] + fill + key[i + 1 :]
+    if len(key) > len(shape):
+        return key, None  # let h5py raise its own IndexError
+    key = key + (builtins.slice(None),) * (len(shape) - len(key))
+    forward, flip = [], []
+    for k, n in zip(key, shape):
+        if isinstance(k, builtins.slice) and (k.step or 1) < 0:
+            r = range(n)[k]
+            forward.append(
+                builtins.slice(r[-1], r[0] + 1, -r.step) if r else builtins.slice(0, 0)
+            )
+            flip.append(builtins.slice(None, None, -1))
+        else:
+            forward.append(k)
+            if isinstance(k, builtins.slice):
+                flip.append(builtins.slice(None))
+    reversed_ = any(f.step == -1 for f in flip)
+    return tuple(forward), (tuple(flip) if reversed_ else None)
+
+
+class _HDF5DatasetReader:
+    """Array-like view of one HDF5 dataset that opens the file on each read
+
+    Each Dask chunk of `HDF5ArrayAdapter` reads through `dask.array.core.getter` on
+    one of these, which lets Dask's slice optimization fuse a later slice of the array
+    into the key passed here. h5py then reads only the requested elements, rather
+    than the whole Dask chunk. That matters for contiguous (unchunked) datasets,
+    which are served as a single Dask chunk.
+    """
+
+    def __init__(
+        self,
+        fpath: str | Path,
+        dataset: str | None,
+        shape: tuple[int, ...],
+        dtype: numpy.dtype,
+        **kwargs: Any,
+    ) -> None:
+        self.fpath = fpath
+        self.dataset = dataset
+        self.shape = shape
+        self.dtype = dtype
+        self.ndim = len(shape)
+        self._kwargs = kwargs  # swmr, libver, locking
+
+    def __getitem__(self, key: Any) -> NDArray:
+        key, flip = _forward_selection(key, self.shape)
+        with h5open(self.fpath, self.dataset, **self._kwargs) as ds:
+            arr = ds[key]
+        return arr[flip] if flip else arr
 
 
 class HDF5ArrayAdapter(ArrayAdapter):
@@ -303,7 +374,22 @@ class HDF5ArrayAdapter(ArrayAdapter):
             name = "hdf5-stack-" + str(hash(tuple([dataset, *file_paths])))
             dsk = {}  # mapping of (name: task + args) for delayed read task
             dim0_chunk_idx = 0  # global chunk index along the leftmost dimension
-            for fpath, dim0_chunks in zip(file_paths, file_chunks):
+            for file_idx, (fpath, dim0_chunks) in enumerate(
+                zip(file_paths, file_chunks)
+            ):
+                # Each file's reader is its own graph key, read through Dask's
+                # `getter`: Dask can then fuse a later slice into the read
+                reader_key = ("hdf5-reader-" + name, file_idx)
+                dsk[reader_key] = _HDF5DatasetReader(
+                    fpath,
+                    dataset,
+                    shapes_chunks_dtypes[file_idx][0],
+                    dtype,
+                    swmr=swmr,
+                    libver=libver,
+                    locking=locking,
+                )
+
                 # Main loop over the chunks for the leftmost dimension for each file
                 dim0_start = 0
                 for dim0_chunk_size in dim0_chunks:
@@ -313,7 +399,7 @@ class HDF5ArrayAdapter(ArrayAdapter):
 
                     # Inner loop over the rest of dimensions
                     for kr, sr in zip(key_rest, slc_rest):
-                        dsk[key + kr] = (_read_hdf5_array, fpath, slc + sr)
+                        dsk[key + kr] = (getter, reader_key, slc + sr)
 
                     dim0_start = dim0_stop
                     dim0_chunk_idx += 1
