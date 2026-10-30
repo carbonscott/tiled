@@ -10,6 +10,7 @@ from tiled.adapters.hdf5 import HDF5Adapter, HDF5ArrayAdapter
 from tiled.adapters.mapping import MapAdapter
 from tiled.catalog import in_memory
 from tiled.client import Context, from_context, record_history
+from tiled.ndslice import NDSlice
 from tiled.server.app import build_app
 from tiled.structures.array import ArrayStructure, BuiltinDtype
 from tiled.structures.core import StructureFamily
@@ -919,3 +920,57 @@ def test_files_opened_and_closed(example_files_with_chunked_arrays, swmr):
 
     h5py.File(file_paths[0], "r", swmr=not swmr).close()
     h5py.File(file_paths[1], "r", swmr=not swmr).close()
+
+
+@pytest.mark.parametrize("chunks", [None, (1, 8, 8)])
+def test_reads_only_requested_elements(tmp_path, monkeypatch, chunks):
+    """A slice reaches h5py, so a contiguous dataset is not read in full."""
+    h5py = pytest.importorskip("h5py")
+    data = numpy.arange(20 * 8 * 8, dtype="float64").reshape((20, 8, 8))
+    file_path = tmp_path / "stack.h5"
+    with h5py.File(file_path, "w") as file:
+        file.create_dataset("x", data=data, chunks=chunks)
+
+    nbytes_read = []
+    getitem = h5py.Dataset.__getitem__
+
+    def counting_getitem(self, *args, **kwargs):
+        out = getitem(self, *args, **kwargs)
+        nbytes_read.append(numpy.asarray(out).nbytes)
+        return out
+
+    monkeypatch.setattr(h5py.Dataset, "__getitem__", counting_getitem)
+
+    # One subscript: exactly the requested elements are read
+    adapter = HDF5ArrayAdapter.from_uris(ensure_uri(file_path), dataset="x")
+    nbytes_read.clear()
+    corner = adapter.read(NDSlice(5, slice(0, 2), slice(0, 2)))
+    numpy.testing.assert_array_equal(corner, data[5, :2, :2])
+    assert sum(nbytes_read) == corner.nbytes
+
+    # Registered with a `slice` parameter: at most the selected row is read
+    adapter = HDF5ArrayAdapter.from_uris(ensure_uri(file_path), dataset="x", slice="5")
+    nbytes_read.clear()
+    numpy.testing.assert_array_equal(adapter.read(), data[5])
+    assert sum(nbytes_read) == data[5].nbytes
+    nbytes_read.clear()
+    corner = adapter.read(NDSlice(slice(0, 2), slice(0, 2)))
+    numpy.testing.assert_array_equal(corner, data[5, :2, :2])
+    assert sum(nbytes_read) <= data[5].nbytes
+
+
+def test_reads_negative_steps(tmp_path):
+    """h5py reads forwards only; negative steps are reversed after the read."""
+    h5py = pytest.importorskip("h5py")
+    data = numpy.arange(20 * 8, dtype="int64").reshape((20, 8))
+    file_path = tmp_path / "stack.h5"
+    with h5py.File(file_path, "w") as file:
+        file.create_dataset("x", data=data)
+    adapter = HDF5ArrayAdapter.from_uris(ensure_uri(file_path), dataset="x")
+    for slc in [
+        NDSlice(slice(None, None, -1)),
+        NDSlice(slice(15, 2, -3), slice(None, None, -2)),
+        NDSlice(4, slice(6, None, -1)),
+        NDSlice(slice(2, 15, -1)),  # empty
+    ]:
+        numpy.testing.assert_array_equal(adapter.read(slc), data[tuple(slc)])

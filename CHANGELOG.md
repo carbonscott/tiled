@@ -73,6 +73,11 @@ Write the date in place of the "Unreleased" in the case a new version is release
 
 ### Fixed
 
+- `HDF5ArrayAdapter` no longer reads a whole contiguous (unchunked) dataset
+  to serve a slice of it. Each Dask chunk now reads through
+  `dask.array.core.getter`, so Dask fuses the requested slice into the h5py
+  read; before, a contiguous dataset was a single Dask chunk and every
+  request read all of it.
 - Fixed `read_partition` on a table with a string column, which failed with
   a dtype mismatch (`object` in the structure, `string` in the data sent by
   the server). The eager client now fetches the partition directly, without
