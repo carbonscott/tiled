@@ -89,7 +89,8 @@ Write the date in place of the "Unreleased" in the case a new version is release
   `/array/block` and Zarr served a dataset registered with an integer `slice`
   in native byte order, or as a shorter string.
   `compose_slices` now also composes reversed slices that run to the start of
-  an axis, which it returned empty or refused.
+  an axis, which it returned empty or refused; `NDSlice.expand_for_shape`
+  gives such a slice no stop.
 - Fixed `read_partition` on a table with a string column, which failed with
   a dtype mismatch (`object` in the structure, `string` in the data sent by
   the server). The eager client now fetches the partition directly, without

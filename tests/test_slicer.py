@@ -7,6 +7,7 @@ import pytest
 from fastapi import Query
 from hypothesis import assume, given
 from hypothesis import strategies as st
+from ndindex import ndindex
 from starlette.status import HTTP_422_UNPROCESSABLE_CONTENT
 
 from tiled.catalog import in_memory
@@ -325,6 +326,69 @@ def test_compose_slices(shape, data):
     np.testing.assert_array_equal(arr[slc1][slc2], arr[slc1[slc2]])
 
 
+def test_compose_reversed_slice_with_relative_stop():
+    """Unexpanded, a reversed slice with a negative stop counts from the end of
+    the axis and does not compose; expanded, it has no stop and composes."""
+    arr = np.arange(10)
+    for left in [slice(5, -3, -1), slice(9, -11, -1)]:
+        for right in [NDSlice(slice(0, 3)), NDSlice(0)]:
+            with pytest.raises(ValueError, match="undetermined shape"):
+                NDSlice(left)[right]
+
+    assert NDSlice(slice(None, None, -1)).expand_for_shape((10,)) == NDSlice(
+        slice(9, None, -1)
+    )
+    for left in [
+        slice(5, -3, -1),
+        slice(8, -5, -1),
+        slice(None, None, -1),
+        slice(5, None, -2),
+        slice(9, -11, -1),
+    ]:
+        expanded = NDSlice(left).expand_for_shape(arr.shape)
+        n = len(arr[left])
+        for right in [slice(0, 3), slice(None, None, -1), slice(1, None, 2)] + list(
+            range(-n, n)
+        ):
+            np.testing.assert_array_equal(
+                arr[tuple(expanded[NDSlice(right)])], arr[left][right]
+            )
+
+
+def any_index_strategy(shape):
+    "An index of an array of `shape`: integers and any slices, empty ones included"
+
+    def entry(n):
+        bound = st.one_of(st.none(), st.integers(-n - 2, n + 2))
+        step = st.one_of(st.none(), st.sampled_from([1, 2, 3, -1, -2, -3]))
+        slices = st.builds(slice, bound, bound, step)
+        return st.one_of(st.integers(-n, n - 1), slices) if n else slices
+
+    return st.tuples(*(entry(n) for n in shape))
+
+
+@given(
+    shape=st.lists(st.integers(0, 6), min_size=1, max_size=3),
+    squeeze=st.booleans(),
+    data=st.data(),
+)
+def test_compose_expanded_slices(shape, squeeze, data):
+    """Slices expanded by `expand_for_shape` compose as numpy applies them, with
+    reversed slices that run to the start of an axis and squeezed ones."""
+    arr = np.arange(np.prod(shape)).reshape(shape)
+    index1 = data.draw(any_index_strategy(arr.shape))
+    slc1 = NDSlice(index1).expand_for_shape(arr.shape, squeeze=squeeze)
+    arr1 = np.squeeze(arr[index1]) if squeeze else arr[index1]
+    assert slc1.is_expanded()
+    assert arr[tuple(slc1)].shape == arr1.shape
+    np.testing.assert_array_equal(arr[tuple(slc1)], arr1)
+
+    index2 = data.draw(any_index_strategy(arr1.shape))
+    slc2 = NDSlice(index2).expand_for_shape(arr1.shape)
+    assert arr[tuple(slc1[slc2])].shape == arr1[index2].shape
+    np.testing.assert_array_equal(arr[tuple(slc1[slc2])], arr1[index2])
+
+
 @given(
     shape=st.lists(st.integers(1, 6), min_size=1, max_size=4),
     data=st.data(),
@@ -434,7 +498,7 @@ def test_split_slice_correctness(shape, data):
     Mirrors how the array client fetches a large slice in multiple requests:
     split the (expanded) slice, apply each piece, then reassemble the pieces on
     the split grid. In particular this covers reversed slices that reach index 0,
-    whose expanded form has a negative canonical stop.
+    whose expanded form has no stop.
     """
     arr = np.arange(np.prod(shape)).reshape(shape)
     chunks = data.draw(chunks_strategy(shape))
@@ -461,9 +525,10 @@ def test_split_slice_correctness(shape, data):
 @pytest.mark.parametrize(
     "shape, index",
     [
-        # Reversed slices that reach index 0 expand to a negative canonical stop
-        # (e.g. [::-1] on len 10 -> slice(9, -11, -1)); the split path must not
-        # treat that stop as an absolute coordinate.
+        # Reversed slices that reach index 0 expand to no stop, or as ndindex
+        # expands them to a negative canonical one (e.g. [::-1] on len 10 ->
+        # slice(9, -11, -1)); the split path must not treat that stop as an
+        # absolute coordinate.
         ((10,), slice(None, None, -1)),
         ((10,), slice(5, None, -1)),
         ((10,), slice(9, None, -3)),
@@ -475,10 +540,14 @@ def test_split_slice_correctness(shape, data):
     ],
 )
 @pytest.mark.parametrize("max_size", [1, 2, 3, 5])
-def test_split_slice_reversed_reaching_zero(shape, index, max_size):
+@pytest.mark.parametrize("expand", ["expand_for_shape", "ndindex"])
+def test_split_slice_reversed_reaching_zero(shape, index, max_size, expand):
     # split_slice reassembles reversed slices, including those reaching index 0.
     arr = np.arange(np.prod(shape)).reshape(shape)
-    expanded = NDSlice(index).expand_for_shape(shape)
+    if expand == "ndindex":
+        expanded = NDSlice(*ndindex(index).expand(shape).raw)
+    else:
+        expanded = NDSlice(index).expand_for_shape(shape)
     expected = arr[expanded]
 
     indexed_slices = split_slice(expanded, max_size=max_size)

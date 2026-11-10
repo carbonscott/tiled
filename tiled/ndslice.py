@@ -107,10 +107,10 @@ def _num_steps(slc: builtins.slice) -> int:
 def _slice_range(slc: builtins.slice) -> range:
     """Indices an expanded 1-D slice selects.
 
-    Tolerates reversed slices that reach the start of the axis, whose expanded
-    `stop` is negative (e.g. `slice(9, -11, -1)`) or `None`. For those the
-    exclusive lower bound is `-1` in Python `range` terms, regardless of the
-    particular negative value produced by `expand_for_shape`.
+    Tolerates reversed slices that reach the start of the axis, whose `stop` is
+    `None` (as `expand_for_shape` gives them) or negative (as ndindex expands
+    them, e.g. `slice(9, -11, -1)`). For those the exclusive lower bound is `-1`
+    in Python `range` terms, regardless of the particular negative value.
     """
     start = slc.start or 0
     step = slc.step or 1
@@ -128,11 +128,12 @@ def split_1d(start, stop, step, max_len: int, pref_splits: list[int] | None = No
     as long as it does not violate the min/max constraints.
     """
 
-    # A reversed slice reaching the start of the axis is expanded (by ndindex) to
-    # a negative canonical stop (e.g. slice(9, -11, -1)). Such a slice has no
-    # non-negative integer stop, so partition it as if the exclusive bound were
-    # -1 and emit stop=None for the final sub-slice that reaches index 0.
-    reaches_start = step < 0 and stop is not None and stop < 0
+    # A reversed slice reaching the start of the axis has no stop once expanded by
+    # `expand_for_shape`, and a negative canonical one as ndindex expands it (e.g.
+    # slice(9, -11, -1)). Such a slice has no non-negative integer stop, so
+    # partition it as if the exclusive bound were -1 and emit stop=None for the
+    # final sub-slice that reaches index 0.
+    reaches_start = step < 0 and (stop is None or stop < 0)
     eff_stop = -1 if reaches_start else stop
 
     # Total number of steps and max steps per split
@@ -205,11 +206,7 @@ def split_slice(
     # Make sure preferred split points align with the step grid and within the bounds
     if pref_splits is not None:
         pref_splits = [
-            [
-                x
-                for x in bnd
-                if x in range(slc.start, slc.stop, slc.step or 1) and x != slc.start
-            ]
+            [x for x in bnd if x in _slice_range(slc) and x != slc.start]
             for bnd, slc in zip(pref_splits, arr_slice)
         ]
 
@@ -491,8 +488,12 @@ class NDSlice(tuple):
         def _is_absolute(s: builtins.slice) -> bool:
             if (s.step or 1) < 0:
                 # Expanded, a reversed slice that runs to the start of the axis
-                # has a negative stop or none, e.g. `slice(9, -11, -1)`
-                return s.start is not None and s.start >= 0
+                # has no stop: a negative one counts from the end
+                return (
+                    s.start is not None
+                    and s.start >= 0
+                    and (s.stop is None or s.stop >= 0)
+                )
             return (s.start or 0) >= 0 and (s.stop is not None and s.stop >= 0)
 
         return all(
@@ -581,17 +582,21 @@ class NDSlice(tuple):
     ) -> "NDSlice":
         """Expand this NDSlice (remove ':' or '...') for an array of the given shape
 
+        A reversed slice that runs to the start of an axis has no stop, e.g.
+        `slice(9, None, -1)` (ndindex gives it a negative one, which would read
+        as relative to the end).
+
         With `squeeze`, a slice that selects a single element becomes its index,
         dropping the dimensions of length 1 as `numpy.squeeze` would after slicing.
         """
-        expanded = ndindex(self).expand(shape).raw
-        if squeeze:
-            expanded = tuple(
-                s.indices(n)[0]
-                if isinstance(s, builtins.slice) and _is_scalar_slice(s, length=n)
-                else s
-                for s, n in zip(expanded, shape)
-            )
+        expanded = []
+        for s, n in zip(ndindex(self).expand(shape).raw, shape):
+            if isinstance(s, builtins.slice):
+                if squeeze and _is_scalar_slice(s, length=n):
+                    s = s.indices(n)[0]
+                elif (s.step or 1) < 0 and s.stop is not None and s.stop < 0:
+                    s = builtins.slice(s.start, None, s.step)
+            expanded.append(s)
         return self.__class__(*expanded)
 
     def shape_after_slice(self, shape: tuple[int, ...]) -> tuple[int, ...]:
