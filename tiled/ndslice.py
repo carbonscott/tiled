@@ -100,7 +100,12 @@ def merge_slices(*args: "NDSlice | NDBlock") -> "NDSlice | NDBlock":
 
 
 def _num_steps(slc: builtins.slice) -> int:
-    """Number of elements an expanded 1-D slice selects.
+    "Number of elements an expanded 1-D slice selects."
+    return len(_slice_range(slc))
+
+
+def _slice_range(slc: builtins.slice) -> range:
+    """Indices an expanded 1-D slice selects.
 
     Tolerates reversed slices that reach the start of the axis, whose expanded
     `stop` is negative (e.g. `slice(9, -11, -1)`) or `None`. For those the
@@ -112,7 +117,7 @@ def _num_steps(slc: builtins.slice) -> int:
     stop = slc.stop
     if step < 0 and (stop is None or stop < 0):
         stop = -1
-    return len(range(start, stop, step))
+    return range(start, stop, step)
 
 
 def split_1d(start, stop, step, max_len: int, pref_splits: list[int] | None = None):
@@ -252,50 +257,29 @@ def split_slice(
 def _slc_with_int(slc: builtins.slice, idx: int) -> int:
     "Compose a (1D) slice with an integer index"
 
-    if slc.start is None or slc.stop is None:
+    if slc.start is None or (slc.stop is None and (slc.step or 1) > 0):
         raise ValueError("Composition with relative indexing is not supported.")
 
-    start, stop, step = slc.start, slc.stop, slc.step or 1
-
-    # Estimate maximum length of the resulting shape after slice
-    if step > 0:
-        length = max(0, (stop - start + step - 1) // step)
-    else:
-        length = max(0, (start - stop - step - 1) // (-step))
-
-    # Normalize negative index
-    if idx < 0:
-        idx += length
-
-    if idx < 0 or idx >= length:
-        raise ValueError("Composition with out-of-bounds index")
-
-    return start + step * idx
+    try:
+        return _slice_range(slc)[idx]
+    except IndexError:
+        raise ValueError("Composition with out-of-bounds index") from None
 
 
 def _slc_with_slc(slc1: builtins.slice, slc2: builtins.slice) -> builtins.slice:
     "Compose a (1D) slice with another slice"
 
-    # Normalize first slice
-    if slc1.start is None or slc1.stop is None:
+    if slc1.start is None or (slc1.stop is None and (slc1.step or 1) > 0):
         raise ValueError("Composition with relative indexing is not supported.")
-    start1, stop1, step1 = slc1.start, slc1.stop, slc1.step or 1
 
-    # Estimate maximum length of the resulting shape after first slice
-    if step1 > 0:
-        length = max(0, (stop1 - start1 + step1 - 1) // step1)
-    else:
-        length = max(0, (start1 - stop1 - step1 - 1) // (-step1))
+    indices = _slice_range(slc1)[slc2]
+    if not indices:
+        return builtins.slice(0, 0)
 
-    # Normalize second slice relative to the length of the first slice
-    start2, stop2, step2 = slc2.indices(length)
-
-    # Compose the two normalized slices
-    new_start = start1 + step1 * start2
-    new_step = step1 * step2
-    new_stop = start1 + step1 * stop2
-
-    return builtins.slice(new_start, new_stop, new_step)
+    # A negative stop would count from the end of the axis: a reversed slice
+    # that runs to its start has no stop
+    stop = indices.stop if indices.stop >= 0 else None
+    return builtins.slice(indices.start, stop, indices.step)
 
 
 def _is_scalar_slice(slc: int | builtins.slice, length: int | None = None) -> bool:
@@ -505,6 +489,10 @@ class NDSlice(tuple):
         """
 
         def _is_absolute(s: builtins.slice) -> bool:
+            if (s.step or 1) < 0:
+                # Expanded, a reversed slice that runs to the start of the axis
+                # has a negative stop or none, e.g. `slice(9, -11, -1)`
+                return s.start is not None and s.start >= 0
             return (s.start or 0) >= 0 and (s.stop is not None and s.stop >= 0)
 
         return all(

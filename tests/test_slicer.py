@@ -247,14 +247,7 @@ def slice_strategy(dim_len):
         st.one_of(st.none(), st.integers(-dim_len, dim_len)),
         st.one_of(st.none(), st.integers(-dim_len, dim_len)),
         st.one_of(st.none(), st.integers(-3, 3).filter(lambda x: x != 0)),
-    ).filter(
-        lambda s: sum(
-            1
-            for _ in range(
-                s.start or 0, s.stop if s.stop is not None else dim_len, s.step or 1
-            )
-        )
-    )  # Remove empty slices
+    ).filter(lambda s: len(range(dim_len)[s]))  # Remove empty slices
 
 
 def index_strategy(dim_len):
