@@ -576,9 +576,23 @@ class NDSlice(tuple):
         "Check if this NDSlice is valid for an array of the given shape"
         return (not self) or ndindex(self).isvalid(shape)
 
-    def expand_for_shape(self, shape: tuple[int, ...]) -> "NDSlice":
-        "Expand this NDSlice (remove ':' or '...') for an array of the given shape"
-        return self.__class__(*ndindex(self).expand(shape).raw)
+    def expand_for_shape(
+        self, shape: tuple[int, ...], squeeze: bool = False
+    ) -> "NDSlice":
+        """Expand this NDSlice (remove ':' or '...') for an array of the given shape
+
+        With `squeeze`, a slice that selects a single element becomes its index,
+        dropping the dimensions of length 1 as `numpy.squeeze` would after slicing.
+        """
+        expanded = ndindex(self).expand(shape).raw
+        if squeeze:
+            expanded = tuple(
+                s.indices(n)[0]
+                if isinstance(s, builtins.slice) and _is_scalar_slice(s, length=n)
+                else s
+                for s, n in zip(expanded, shape)
+            )
+        return self.__class__(*expanded)
 
     def shape_after_slice(self, shape: tuple[int, ...]) -> tuple[int, ...]:
         "Calculate the shape after applying NDSlice to an array of the given shape"

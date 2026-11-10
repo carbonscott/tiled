@@ -78,6 +78,15 @@ Write the date in place of the "Unreleased" in the case a new version is release
   `dask.array.core.getter`, so Dask fuses the requested slice into the h5py
   read; before, a contiguous dataset was a single Dask chunk and every
   request read all of it.
+- `HDF5ArrayAdapter` reads only the requested elements of a dataset
+  registered with a `slice` or `squeeze` parameter, and of a request with a
+  negative step. It keeps the registered selection apart from the array and
+  composes it with each requested slice, so Dask fuses a single slice into
+  the h5py read; a negative step is read forwards and reversed in memory.
+  Before, a corner of a registered row read the whole row, and a negative
+  step read whole Dask chunks (all of a contiguous dataset).
+  `compose_slices` now also composes reversed slices that run to the start of
+  an axis, which it returned empty or refused.
 - Fixed `read_partition` on a table with a string column, which failed with
   a dtype mismatch (`object` in the structure, `string` in the data sent by
   the server). The eager client now fetches the partition directly, without

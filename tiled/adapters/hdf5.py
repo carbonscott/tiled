@@ -23,7 +23,7 @@ from tiled.structures.container import ContainerStructure
 from ..adapters.utils import IndexersMixin
 from ..catalog.orm import Node
 from ..iterviews import ItemsView, KeysView, ValuesView
-from ..ndslice import NDSlice
+from ..ndslice import NDBlock, NDSlice
 from ..server.core import NoEntry
 from ..structures.array import ArrayStructure
 from ..structures.core import Spec, StructureFamily
@@ -31,7 +31,7 @@ from ..structures.data_source import DataSource
 from ..type_aliases import JSON
 from ..utils import BrokenLink, Sentinel, node_repr, path_from_uri
 from .array import ArrayAdapter
-from .utils import split_chunks
+from .utils import force_reshape, split_chunks
 
 SWMR_DEFAULT = bool(int(os.getenv("TILED_HDF5_SWMR_DEFAULT", "0")))
 INLINED_DEPTH = int(os.getenv("TILED_HDF5_INLINED_CONTENTS_MAX_DEPTH", "7"))
@@ -224,7 +224,44 @@ class HDF5ArrayAdapter(ArrayAdapter):
 
     This adapter lazily loads array data from HDF5 files using Dask. Supports reading from datasets spanning
     multiple files.
+
+    The array holds the whole dataset of the files, and `stencil` selects the registered part of it (the
+    `slice` and `squeeze` parameters). Each read composes the stencil with the requested slice and slices
+    the array once, which Dask fuses into the h5py read: h5py reads only the requested elements.
     """
+
+    def __init__(
+        self,
+        array: dask.array.Array,
+        structure: ArrayStructure,
+        *,
+        stencil: NDSlice = NDSlice(),
+        metadata: JSON | None = None,
+        specs: list[Spec] | None = None,
+    ) -> None:
+        super().__init__(array, structure, metadata=metadata, specs=specs)
+        self._stencil = stencil
+
+    def read(self, slice: NDSlice = NDSlice(...)) -> NDArray[Any]:
+        return self._read(NDSlice(slice).expand_for_shape(self._structure.shape))
+
+    def read_block(self, block: NDBlock, slice: NDSlice = NDSlice(...)) -> NDArray[Any]:
+        chunks = self._structure.chunks
+        slice = NDSlice(slice).expand_for_shape(block.shape_from_chunks(chunks))
+        return self._read(block.slice_from_chunks(chunks)[slice])
+
+    def _read(self, slice: NDSlice) -> NDArray[Any]:
+        "Read an expanded slice of the registered array"
+        shape = self._structure.shape
+        if self._stencil.shape_after_slice(self._array.shape) != shape:
+            # The file has grown past the structure, or the structure reshapes it
+            registered = force_reshape(self._array[tuple(self._stencil)], shape)
+            return registered[tuple(slice)].compute()
+        # Dask fuses a forward slice into the h5py read, but not a negative step:
+        # read that forwards and reverse it after
+        key, flip = _forward_selection(self._stencil[slice], self._array.shape)
+        array = self._array[key].compute()
+        return array[flip] if flip else array
 
     @staticmethod
     def lazy_load_hdf5_array(
@@ -434,12 +471,10 @@ class HDF5ArrayAdapter(ArrayAdapter):
             *file_paths, dataset=dataset, swmr=swmr, libver=libver, locking=locking
         )
 
-        if slice:
-            if isinstance(slice, str):
-                slice = NDSlice.from_numpy_str(slice)
-            array = array[slice]
-        if squeeze:
-            array = array.squeeze()
+        # The registered part of the array, selected on read
+        if isinstance(slice, str):
+            slice = NDSlice.from_numpy_str(slice)
+        stencil = NDSlice(slice).expand_for_shape(array.shape, squeeze=bool(squeeze))
 
         if array.dtype != structure.data_type.to_numpy_dtype():
             raise ValueError(
@@ -461,6 +496,7 @@ class HDF5ArrayAdapter(ArrayAdapter):
         return cls(
             array,
             structure,
+            stencil=stencil,
             metadata=metadata,
             specs=node.specs,
         )
@@ -482,21 +518,18 @@ class HDF5ArrayAdapter(ArrayAdapter):
             *file_paths, dataset=dataset, swmr=swmr, libver=libver, locking=locking
         )
 
-        # Apply slice and squeeze operations, if specified
-        if slice:
-            if isinstance(slice, str):
-                slice = NDSlice.from_numpy_str(slice)
-            array = array[slice]
-        if squeeze:
-            array = array.squeeze()
+        # The registered part of the array, selected on read
+        if isinstance(slice, str):
+            slice = NDSlice.from_numpy_str(slice)
+        stencil = NDSlice(slice).expand_for_shape(array.shape, squeeze=squeeze)
 
         # Construct the structure and pull additional metadata from the file attributes
-        structure = ArrayStructure.from_array(array)
+        structure = ArrayStructure.from_array(array[tuple(stencil)])
         metadata = get_hdf5_attrs(
             data_uris[0], dataset, swmr=swmr, libver=libver, locking=locking
         )
 
-        return cls(array, structure, metadata=metadata)
+        return cls(array, structure, stencil=stencil, metadata=metadata)
 
 
 class HDF5Adapter(ContainerAdapter["HDF5Adapter | HDF5ArrayAdapter"], IndexersMixin):
