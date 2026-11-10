@@ -1,3 +1,5 @@
+import itertools
+import json
 import os
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -10,7 +12,7 @@ from tiled.adapters.hdf5 import HDF5Adapter, HDF5ArrayAdapter
 from tiled.adapters.mapping import MapAdapter
 from tiled.catalog import in_memory
 from tiled.client import Context, from_context, record_history
-from tiled.ndslice import NDSlice
+from tiled.ndslice import NDBlock, NDSlice
 from tiled.server.app import build_app
 from tiled.structures.array import ArrayStructure, BuiltinDtype
 from tiled.structures.core import StructureFamily
@@ -948,7 +950,7 @@ def test_reads_only_requested_elements(tmp_path, monkeypatch, chunks):
     numpy.testing.assert_array_equal(corner, data[5, :2, :2])
     assert sum(nbytes_read) == corner.nbytes
 
-    # Registered with a `slice` parameter: at most the selected row is read
+    # Registered with a `slice` parameter: it composes with the requested slice
     adapter = HDF5ArrayAdapter.from_uris(ensure_uri(file_path), dataset="x", slice="5")
     nbytes_read.clear()
     numpy.testing.assert_array_equal(adapter.read(), data[5])
@@ -956,7 +958,7 @@ def test_reads_only_requested_elements(tmp_path, monkeypatch, chunks):
     nbytes_read.clear()
     corner = adapter.read(NDSlice(slice(0, 2), slice(0, 2)))
     numpy.testing.assert_array_equal(corner, data[5, :2, :2])
-    assert sum(nbytes_read) <= data[5].nbytes
+    assert sum(nbytes_read) == corner.nbytes
 
 
 def test_reads_negative_steps(tmp_path):
@@ -974,3 +976,213 @@ def test_reads_negative_steps(tmp_path):
         NDSlice(slice(2, 15, -1)),  # empty
     ]:
         numpy.testing.assert_array_equal(adapter.read(slc), data[tuple(slc)])
+
+
+@pytest.fixture(params=["contiguous", "chunks-of-rows", "chunks-of-one-row", "gzip"])
+def stack_file(request, tmp_path):
+    "A (20, 16, 16) stack of rows in one of several HDF5 layouts, and its data"
+    h5py = pytest.importorskip("h5py")
+    layout = {
+        "contiguous": {},
+        "chunks-of-rows": {"chunks": (4, 8, 8)},
+        "chunks-of-one-row": {"chunks": (1, 16, 16)},
+        "gzip": {"chunks": (4, 8, 8), "compression": "gzip"},
+    }[request.param]
+    data = numpy.arange(20 * 16 * 16, dtype="float64").reshape((20, 16, 16))
+    file_path = tmp_path / "stack.h5"
+    with h5py.File(file_path, "w") as file:
+        file.create_dataset("x", data=data, **layout)
+    return ensure_uri(file_path), data
+
+
+@pytest.fixture
+def h5py_nbytes_read(monkeypatch):
+    "The number of bytes returned by each h5py dataset read"
+    h5py = pytest.importorskip("h5py")
+    nbytes_read = []
+    getitem = h5py.Dataset.__getitem__
+
+    def counting_getitem(self, *args, **kwargs):
+        out = getitem(self, *args, **kwargs)
+        nbytes_read.append(numpy.asarray(out).nbytes)
+        return out
+
+    monkeypatch.setattr(h5py.Dataset, "__getitem__", counting_getitem)
+    return nbytes_read
+
+
+@pytest.mark.parametrize(
+    "parameters, select",
+    [
+        ({}, lambda data: data),
+        ({"slice": "5"}, lambda data: data[5]),
+        ({"slice": "5:6", "squeeze": True}, lambda data: data[5]),
+        ({"slice": "17:2:-3"}, lambda data: data[17:2:-3]),
+    ],
+    ids=["whole", "row", "squeezed-row", "reversed-rows"],
+)
+def test_registered_slice_composes_with_requested_slice(
+    stack_file, h5py_nbytes_read, parameters, select
+):
+    """The registered and requested slices are read as one, so h5py reads only
+    the requested elements, whatever the steps and the layout."""
+    uri, data = stack_file
+    adapter = HDF5ArrayAdapter.from_uris(uri, dataset="x", **parameters)
+    registered = select(data)
+    for slc in [
+        NDSlice(...),
+        NDSlice(..., slice(2, 6), slice(3, 9)),
+        NDSlice(..., slice(1, None, 3), slice(None, None, 4)),
+        NDSlice(..., slice(None, None, -1), slice(12, 1, -3)),
+        NDSlice(..., slice(3, 3), slice(None)),
+    ]:
+        h5py_nbytes_read.clear()
+        expected = registered[tuple(slc)]
+        numpy.testing.assert_array_equal(adapter.read(slc), expected)
+        assert sum(h5py_nbytes_read) == expected.nbytes, slc
+
+    chunks = adapter.structure().chunks
+    for block in itertools.product(*(range(len(dim)) for dim in chunks)):
+        block = NDBlock(*block)
+        for slc in [
+            NDSlice(...),
+            NDSlice(..., slice(None, None, -2)),
+            NDSlice(..., slice(1, None, 3)),
+        ]:
+            h5py_nbytes_read.clear()
+            expected = registered[tuple(block.slice_from_chunks(chunks))][tuple(slc)]
+            numpy.testing.assert_array_equal(adapter.read_block(block, slc), expected)
+            assert sum(h5py_nbytes_read) == expected.nbytes, (block, slc)
+
+
+def test_registered_slice_composes_over_http(context, stack_file, h5py_nbytes_read):
+    "A dataset registered in the catalog, read by a client through the server"
+    uri, data = stack_file
+    parameters = {"dataset": "x", "slice": "5:6", "squeeze": True}
+    client = from_context(context)
+    arr = client.new(
+        structure_family=StructureFamily.array,
+        data_sources=[
+            DataSource(
+                mimetype="application/x-hdf5",
+                assets=[Asset(data_uri=uri, is_directory=False, parameter="data_uris")],
+                structure_family=StructureFamily.array,
+                structure=HDF5ArrayAdapter.from_uris(uri, **parameters).structure(),
+                parameters=parameters,
+                management=Management.external,
+            )
+        ],
+    )
+    for slc in [
+        (slice(None),),
+        (slice(2, 6), slice(3, 9)),
+        (slice(1, None, 3), slice(None, None, 4)),
+        (slice(None, None, -1), slice(12, 1, -3)),
+    ]:
+        h5py_nbytes_read.clear()
+        expected = data[5][slc]
+        numpy.testing.assert_array_equal(arr[slc], expected)
+        assert sum(h5py_nbytes_read) == expected.nbytes, slc
+
+
+@pytest.fixture(scope="module")
+def single_element_file(tmp_path_factory):
+    "Datasets whose dtype h5py does not keep when it reads a single element"
+    h5py = pytest.importorskip("h5py")
+    data = {
+        "big-endian-int": numpy.array([256, 258, 260], dtype=">i2"),
+        "big-endian-float": numpy.array([1.5, 262.0, -3.25], dtype=">f8"),
+        "fixed-length-string": numpy.array([b"hello", b"ab", b"xyz"], dtype="S5"),
+    }
+    file_path = tmp_path_factory.mktemp("data").joinpath("single_element.h5")
+    with h5py.File(file_path, "w") as file:
+        for name, values in data.items():
+            file.create_dataset(name, data=values)
+    return ensure_uri(file_path), data
+
+
+def single_element_data_source(uri, dataset, parameters, shape):
+    "Register `dataset` with `parameters`, as an array of `shape` if given"
+    adapter = HDF5ArrayAdapter.from_uris(uri, dataset=dataset, **parameters)
+    structure = adapter.structure()
+    if shape is not None:
+        chunks = tuple((n,) for n in shape)
+        structure = ArrayStructure(
+            data_type=structure.data_type, chunks=chunks, shape=shape
+        )
+    return DataSource(
+        mimetype="application/x-hdf5",
+        assets=[Asset(data_uri=uri, is_directory=False, parameter="data_uris")],
+        structure_family=StructureFamily.array,
+        structure=structure,
+        parameters={"dataset": dataset, **parameters},
+        management=Management.external,
+    )
+
+
+single_element_reads = pytest.mark.parametrize(
+    "parameters, shape, selection",
+    [
+        ({"slice": "1:2", "squeeze": True}, None, ()),
+        ({"slice": "1"}, None, ()),
+        ({}, None, (1,)),
+        ({}, (3, 1), (1, 0)),  # the structure reshapes the dataset
+    ],
+    ids=["squeezed", "indexed", "requested", "reshaped"],
+)
+single_element_datasets = pytest.mark.parametrize(
+    "dataset", ["big-endian-int", "big-endian-float", "fixed-length-string"]
+)
+
+
+@single_element_datasets
+@single_element_reads
+def test_single_element_keeps_dtype(
+    single_element_file, dataset, parameters, shape, selection
+):
+    """A read of one element keeps the dtype of the dataset: h5py reads one
+    element in native byte order, and a fixed-length string without its nulls."""
+    uri, data = single_element_file
+    expected = data[dataset][1:2].reshape(())
+    data_source = single_element_data_source(uri, dataset, parameters, shape)
+    node = SimpleNamespace(metadata_={}, specs=[])
+    adapter = HDF5ArrayAdapter.from_catalog(data_source, node, **data_source.parameters)
+    block = NDBlock(*(0 for _ in adapter.structure().shape))
+    for result in [
+        adapter.read(NDSlice(selection)),
+        adapter.read_block(block, NDSlice(selection)),
+    ]:
+        assert result.shape == ()
+        assert result.dtype == expected.dtype
+        assert result.tobytes() == expected.tobytes()
+
+
+@single_element_datasets
+@single_element_reads
+def test_single_element_keeps_dtype_over_http(
+    context, single_element_file, dataset, parameters, shape, selection
+):
+    "Served alone, an element keeps the dtype of the dataset in every endpoint"
+    numcodecs = pytest.importorskip("numcodecs")
+    uri, data = single_element_file
+    expected = data[dataset][1:2].reshape(())
+    client = from_context(context)
+    arr = client.new(
+        structure_family=StructureFamily.array,
+        data_sources=[single_element_data_source(uri, dataset, parameters, shape)],
+    )
+    block = tuple(0 for _ in arr.shape)
+    for result in [
+        arr.read_block(block, selection or None),  # /array/block
+        arr.read(selection or None),  # /array/full
+    ]:
+        assert result.shape == ()
+        assert result.dtype == expected.dtype
+        assert result.tobytes() == expected.tobytes()
+
+    if not arr.shape:
+        key = arr.item["id"]
+        zarray = json.loads(context.http_client.get(f"/zarr/v2/{key}/.zarray").content)
+        chunk = context.http_client.get(f"/zarr/v2/{key}/0").content
+        codec = numcodecs.get_codec(zarray["compressor"])
+        assert bytes(codec.decode(chunk)) == expected.tobytes()
