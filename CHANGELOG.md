@@ -85,6 +85,9 @@ Write the date in place of the "Unreleased" in the case a new version is release
   the h5py read; a negative step is read forwards and reversed in memory.
   Before, a corner of a registered row read the whole row, and a negative
   step read whole Dask chunks (all of a contiguous dataset).
+  A read of a single element keeps the dtype of the dataset; before,
+  `/array/block` and Zarr served a dataset registered with an integer `slice`
+  in native byte order, or as a shorter string.
   `compose_slices` now also composes reversed slices that run to the start of
   an axis, which it returned empty or refused.
 - Fixed `read_partition` on a table with a string column, which failed with

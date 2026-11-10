@@ -1,4 +1,5 @@
 import itertools
+import json
 import os
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -1082,3 +1083,106 @@ def test_registered_slice_composes_over_http(context, stack_file, h5py_nbytes_re
         expected = data[5][slc]
         numpy.testing.assert_array_equal(arr[slc], expected)
         assert sum(h5py_nbytes_read) == expected.nbytes, slc
+
+
+@pytest.fixture(scope="module")
+def single_element_file(tmp_path_factory):
+    "Datasets whose dtype h5py does not keep when it reads a single element"
+    h5py = pytest.importorskip("h5py")
+    data = {
+        "big-endian-int": numpy.array([256, 258, 260], dtype=">i2"),
+        "big-endian-float": numpy.array([1.5, 262.0, -3.25], dtype=">f8"),
+        "fixed-length-string": numpy.array([b"hello", b"ab", b"xyz"], dtype="S5"),
+    }
+    file_path = tmp_path_factory.mktemp("data").joinpath("single_element.h5")
+    with h5py.File(file_path, "w") as file:
+        for name, values in data.items():
+            file.create_dataset(name, data=values)
+    return ensure_uri(file_path), data
+
+
+def single_element_data_source(uri, dataset, parameters, shape):
+    "Register `dataset` with `parameters`, as an array of `shape` if given"
+    adapter = HDF5ArrayAdapter.from_uris(uri, dataset=dataset, **parameters)
+    structure = adapter.structure()
+    if shape is not None:
+        chunks = tuple((n,) for n in shape)
+        structure = ArrayStructure(
+            data_type=structure.data_type, chunks=chunks, shape=shape
+        )
+    return DataSource(
+        mimetype="application/x-hdf5",
+        assets=[Asset(data_uri=uri, is_directory=False, parameter="data_uris")],
+        structure_family=StructureFamily.array,
+        structure=structure,
+        parameters={"dataset": dataset, **parameters},
+        management=Management.external,
+    )
+
+
+single_element_reads = pytest.mark.parametrize(
+    "parameters, shape, selection",
+    [
+        ({"slice": "1:2", "squeeze": True}, None, ()),
+        ({"slice": "1"}, None, ()),
+        ({}, None, (1,)),
+        ({}, (3, 1), (1, 0)),  # the structure reshapes the dataset
+    ],
+    ids=["squeezed", "indexed", "requested", "reshaped"],
+)
+single_element_datasets = pytest.mark.parametrize(
+    "dataset", ["big-endian-int", "big-endian-float", "fixed-length-string"]
+)
+
+
+@single_element_datasets
+@single_element_reads
+def test_single_element_keeps_dtype(
+    single_element_file, dataset, parameters, shape, selection
+):
+    """A read of one element keeps the dtype of the dataset: h5py reads one
+    element in native byte order, and a fixed-length string without its nulls."""
+    uri, data = single_element_file
+    expected = data[dataset][1:2].reshape(())
+    data_source = single_element_data_source(uri, dataset, parameters, shape)
+    node = SimpleNamespace(metadata_={}, specs=[])
+    adapter = HDF5ArrayAdapter.from_catalog(data_source, node, **data_source.parameters)
+    block = NDBlock(*(0 for _ in adapter.structure().shape))
+    for result in [
+        adapter.read(NDSlice(selection)),
+        adapter.read_block(block, NDSlice(selection)),
+    ]:
+        assert result.shape == ()
+        assert result.dtype == expected.dtype
+        assert result.tobytes() == expected.tobytes()
+
+
+@single_element_datasets
+@single_element_reads
+def test_single_element_keeps_dtype_over_http(
+    context, single_element_file, dataset, parameters, shape, selection
+):
+    "Served alone, an element keeps the dtype of the dataset in every endpoint"
+    numcodecs = pytest.importorskip("numcodecs")
+    uri, data = single_element_file
+    expected = data[dataset][1:2].reshape(())
+    client = from_context(context)
+    arr = client.new(
+        structure_family=StructureFamily.array,
+        data_sources=[single_element_data_source(uri, dataset, parameters, shape)],
+    )
+    block = tuple(0 for _ in arr.shape)
+    for result in [
+        arr.read_block(block, selection or None),  # /array/block
+        arr.read(selection or None),  # /array/full
+    ]:
+        assert result.shape == ()
+        assert result.dtype == expected.dtype
+        assert result.tobytes() == expected.tobytes()
+
+    if not arr.shape:
+        key = arr.item["id"]
+        zarray = json.loads(context.http_client.get(f"/zarr/v2/{key}/.zarray").content)
+        chunk = context.http_client.get(f"/zarr/v2/{key}/0").content
+        codec = numcodecs.get_codec(zarray["compressor"])
+        assert bytes(codec.decode(chunk)) == expected.tobytes()

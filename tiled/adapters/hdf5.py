@@ -256,12 +256,16 @@ class HDF5ArrayAdapter(ArrayAdapter):
         if self._stencil.shape_after_slice(self._array.shape) != shape:
             # The file has grown past the structure, or the structure reshapes it
             registered = force_reshape(self._array[tuple(self._stencil)], shape)
-            return registered[tuple(slice)].compute()
-        # Dask fuses a forward slice into the h5py read, but not a negative step:
-        # read that forwards and reverse it after
-        key, flip = _forward_selection(self._stencil[slice], self._array.shape)
-        array = self._array[key].compute()
-        return array[flip] if flip else array
+            array = registered[tuple(slice)].compute()
+        else:
+            # Dask fuses a forward slice into the h5py read, but not a negative
+            # step: read that forwards and reverse it after
+            key, flip = _forward_selection(self._stencil[slice], self._array.shape)
+            array = self._array[key].compute()
+            array = array[flip] if flip else array
+        # h5py reads a single element as a NumPy scalar in native byte order and,
+        # for a fixed-length string, without its trailing nulls
+        return numpy.asarray(array, dtype=self._array.dtype)
 
     @staticmethod
     def lazy_load_hdf5_array(
