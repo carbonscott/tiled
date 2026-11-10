@@ -1,0 +1,209 @@
+
+=== build base: _matrix-worker ===
+[base] starting: /home/exedev/projects/tiled-lazy-hdf5/harness-test/builds/base/.venv/bin/tiled serve catalog --temp --read /home/exedev/projects/tiled-lazy-hdf5/harness-test/data --host 127.0.0.1 --port 55555
+[base] ready at http://127.0.0.1:55555 (pid 1733790); log /home/exedev/projects/tiled-lazy-hdf5/harness-test/run/base/server.log
+registered 12 nodes from 6 files in data/matrix
+
+=== build pr2: _matrix-worker ===
+[pr2] starting: /home/exedev/projects/tiled-lazy-hdf5/harness-test/builds/pr2/.venv/bin/tiled serve catalog --temp --read /home/exedev/projects/tiled-lazy-hdf5/harness-test/data --host 127.0.0.1 --port 34479
+[pr2] ready at http://127.0.0.1:34479 (pid 1733824); log /home/exedev/projects/tiled-lazy-hdf5/harness-test/run/pr2/server.log
+registered 12 nodes from 6 files in data/matrix
+
+=== build head: _matrix-worker ===
+[head] starting: /home/exedev/projects/tiled-lazy-hdf5/harness-test/builds/head/.venv/bin/tiled serve catalog --temp --read /home/exedev/projects/tiled-lazy-hdf5/harness-test/data --host 127.0.0.1 --port 34835
+[head] ready at http://127.0.0.1:34835 (pid 1733861); log /home/exedev/projects/tiled-lazy-hdf5/harness-test/run/head/server.log
+registered 12 nodes from 6 files in data/matrix
+
+base: sha=b7e1fea8570391852a52e06dada39397e24e2335 tiled=0.0.1.dev3631+gb7e1fea85 dask=2026.8.0 h5py=3.16.0 hdf5=2.0.0 numpy=2.5.4 python=3.12.3 host=velvet-comet
+pr2: sha=514dc33a66430b053d1338801da19eb3154b993b tiled=0.0.1.dev3632+g514dc33a6 dask=2026.8.0 h5py=3.16.0 hdf5=2.0.0 numpy=2.5.4 python=3.12.3 host=velvet-comet
+head: sha=421569c45edcb7cfdc8f7b47352a4a2a8cb3700c tiled=0.0.1.dev3634+g421569c45 dask=2026.8.0 h5py=3.16.0 hdf5=2.0.0 numpy=2.5.4 python=3.12.3 host=velvet-comet
+
+build  layout      registration  request  dtype    equal  h5py_bytes  requested_bytes  ms      verdict
+-----  ----------  ------------  -------  -------  -----  ----------  ---------------  ------  -----------
+base   contiguous  whole         entity   float64  True   4718592     98304            37.7    FAIL(bytes)
+base   contiguous  whole         window   float64  True   4718592     800              36.69   FAIL(bytes)
+base   contiguous  whole         strided  float64  True   4718592     7200             35.34   FAIL(bytes)
+base   contiguous  whole         negstep  float64  True   4718592     6528             38.51   FAIL(bytes)
+base   contiguous  whole         block    float64  True   4718592     4718592          93.5    PASS
+base   contiguous  whole         entity   int16    True   1179648     24576            42.07   FAIL(bytes)
+base   contiguous  whole         window   int16    True   1179648     200              29.74   FAIL(bytes)
+base   contiguous  whole         strided  int16    True   1179648     1800             31.61   FAIL(bytes)
+base   contiguous  whole         negstep  int16    True   1179648     1632             29.46   FAIL(bytes)
+base   contiguous  whole         block    int16    True   1179648     1179648          41.46   PASS
+base   contiguous  row           entity   float64  True   4718592     98304            49.35   FAIL(bytes)
+base   contiguous  row           window   float64  True   4718592     800              34.39   FAIL(bytes)
+base   contiguous  row           strided  float64  True   4718592     7200             49.15   FAIL(bytes)
+base   contiguous  row           negstep  float64  True   4718592     6528             32.21   FAIL(bytes)
+base   contiguous  row           block    float64  True   4718592     98304            32.14   FAIL(bytes)
+base   contiguous  row           entity   int16    True   1179648     24576            31.05   FAIL(bytes)
+base   contiguous  row           window   int16    True   1179648     200              30.79   FAIL(bytes)
+base   contiguous  row           strided  int16    True   1179648     1800             30.82   FAIL(bytes)
+base   contiguous  row           negstep  int16    True   1179648     1632             32.13   FAIL(bytes)
+base   contiguous  row           block    int16    True   1179648     24576            33.79   FAIL(bytes)
+base   chunked     whole         entity   float64  True   786432      98304            47.06   FAIL(bytes)
+base   chunked     whole         window   float64  True   245760      800              32.3    FAIL(bytes)
+base   chunked     whole         strided  float64  True   786432      7200             53.46   FAIL(bytes)
+base   chunked     whole         negstep  float64  True   589824      6528             43.46   FAIL(bytes)
+base   chunked     whole         block    float64  True   122880      122880           34.93   PASS
+base   chunked     whole         entity   int16    True   196608      24576            40.77   FAIL(bytes)
+base   chunked     whole         window   int16    True   61440       200              33.72   FAIL(bytes)
+base   chunked     whole         strided  int16    True   196608      1800             41.01   FAIL(bytes)
+base   chunked     whole         negstep  int16    True   147456      1632             38.23   FAIL(bytes)
+base   chunked     whole         block    int16    True   30720       30720            33.47   PASS
+base   chunked     row           entity   float64  True   786432      98304            40.66   FAIL(bytes)
+base   chunked     row           window   float64  True   245760      800              30.87   FAIL(bytes)
+base   chunked     row           strided  float64  True   786432      7200             39.47   FAIL(bytes)
+base   chunked     row           negstep  float64  True   589824      6528             37.21   FAIL(bytes)
+base   chunked     row           block    float64  True   122880      15360            30.73   FAIL(bytes)
+base   chunked     row           entity   int16    True   196608      24576            46.73   FAIL(bytes)
+base   chunked     row           window   int16    True   61440       200              38.92   FAIL(bytes)
+base   chunked     row           strided  int16    True   196608      1800             43.46   FAIL(bytes)
+base   chunked     row           negstep  int16    True   147456      1632             36.41   FAIL(bytes)
+base   chunked     row           block    int16    True   30720       3840             32.99   FAIL(bytes)
+base   compressed  whole         entity   float64  True   786432      98304            43.84   FAIL(bytes)
+base   compressed  whole         window   float64  True   245760      800              32.61   FAIL(bytes)
+base   compressed  whole         strided  float64  True   786432      7200             44.09   FAIL(bytes)
+base   compressed  whole         negstep  float64  True   589824      6528             38.61   FAIL(bytes)
+base   compressed  whole         block    float64  True   122880      122880           33.12   PASS
+base   compressed  whole         entity   int16    True   196608      24576            40.9    FAIL(bytes)
+base   compressed  whole         window   int16    True   61440       200              33.38   FAIL(bytes)
+base   compressed  whole         strided  int16    True   196608      1800             45.83   FAIL(bytes)
+base   compressed  whole         negstep  int16    True   147456      1632             41.86   FAIL(bytes)
+base   compressed  whole         block    int16    True   30720       30720            32.46   PASS
+base   compressed  row           entity   float64  True   786432      98304            55.06   FAIL(bytes)
+base   compressed  row           window   float64  True   245760      800              45.63   FAIL(bytes)
+base   compressed  row           strided  float64  True   786432      7200             49.37   FAIL(bytes)
+base   compressed  row           negstep  float64  True   589824      6528             230.53  FAIL(bytes)
+base   compressed  row           block    float64  True   122880      15360            34.54   FAIL(bytes)
+base   compressed  row           entity   int16    True   196608      24576            40.97   FAIL(bytes)
+base   compressed  row           window   int16    True   61440       200              33.47   FAIL(bytes)
+base   compressed  row           strided  int16    True   196608      1800             44.82   FAIL(bytes)
+base   compressed  row           negstep  int16    True   147456      1632             36.87   FAIL(bytes)
+base   compressed  row           block    int16    True   30720       3840             42.23   FAIL(bytes)
+pr2    contiguous  whole         entity   float64  True   98304       98304            34.11   PASS
+pr2    contiguous  whole         window   float64  True   800         800              35.63   PASS
+pr2    contiguous  whole         strided  float64  True   7200        7200             30.11   PASS
+pr2    contiguous  whole         negstep  float64  True   4718592     6528             38.96   FAIL(bytes)
+pr2    contiguous  whole         block    float64  True   4718592     4718592          98.08   PASS
+pr2    contiguous  whole         entity   int16    True   24576       24576            36.05   PASS
+pr2    contiguous  whole         window   int16    True   200         200              30.56   PASS
+pr2    contiguous  whole         strided  int16    True   1800        1800             30.37   PASS
+pr2    contiguous  whole         negstep  int16    True   1179648     1632             36.37   FAIL(bytes)
+pr2    contiguous  whole         block    int16    True   1179648     1179648          39.84   PASS
+pr2    contiguous  row           entity   float64  True   98304       98304            32.11   PASS
+pr2    contiguous  row           window   float64  True   98304       800              32.36   FAIL(bytes)
+pr2    contiguous  row           strided  float64  True   98304       7200             32.66   FAIL(bytes)
+pr2    contiguous  row           negstep  float64  True   98304       6528             36.71   FAIL(bytes)
+pr2    contiguous  row           block    float64  True   98304       98304            34.4    PASS
+pr2    contiguous  row           entity   int16    True   24576       24576            34.49   PASS
+pr2    contiguous  row           window   int16    True   24576       200              30.71   FAIL(bytes)
+pr2    contiguous  row           strided  int16    True   24576       1800             29.78   FAIL(bytes)
+pr2    contiguous  row           negstep  int16    True   24576       1632             29.18   FAIL(bytes)
+pr2    contiguous  row           block    int16    True   24576       24576            30.47   PASS
+pr2    chunked     whole         entity   float64  True   98304       98304            47.81   PASS
+pr2    chunked     whole         window   float64  True   800         800              33.3    PASS
+pr2    chunked     whole         strided  float64  True   7200        7200             40.77   PASS
+pr2    chunked     whole         negstep  float64  True   589824      6528             36.95   FAIL(bytes)
+pr2    chunked     whole         block    float64  True   122880      122880           36.26   PASS
+pr2    chunked     whole         entity   int16    True   24576       24576            42.15   PASS
+pr2    chunked     whole         window   int16    True   200         200              31.94   PASS
+pr2    chunked     whole         strided  int16    True   1800        1800             38.88   PASS
+pr2    chunked     whole         negstep  int16    True   147456      1632             33.86   FAIL(bytes)
+pr2    chunked     whole         block    int16    True   30720       30720            36.78   PASS
+pr2    chunked     row           entity   float64  True   98304       98304            39.37   PASS
+pr2    chunked     row           window   float64  True   30720       800              33.91   FAIL(bytes)
+pr2    chunked     row           strided  float64  True   98304       7200             39.18   FAIL(bytes)
+pr2    chunked     row           negstep  float64  True   73728       6528             35.24   FAIL(bytes)
+pr2    chunked     row           block    float64  True   15360       15360            30.9    PASS
+pr2    chunked     row           entity   int16    True   24576       24576            39.11   PASS
+pr2    chunked     row           window   int16    True   7680        200              32.76   FAIL(bytes)
+pr2    chunked     row           strided  int16    True   24576       1800             41.31   FAIL(bytes)
+pr2    chunked     row           negstep  int16    True   18432       1632             35.74   FAIL(bytes)
+pr2    chunked     row           block    int16    True   3840        3840             31.33   PASS
+pr2    compressed  whole         entity   float64  True   98304       98304            46.76   PASS
+pr2    compressed  whole         window   float64  True   800         800              32.61   PASS
+pr2    compressed  whole         strided  float64  True   7200        7200             41.51   PASS
+pr2    compressed  whole         negstep  float64  True   589824      6528             38.56   FAIL(bytes)
+pr2    compressed  whole         block    float64  True   122880      122880           31.93   PASS
+pr2    compressed  whole         entity   int16    True   24576       24576            41.3    PASS
+pr2    compressed  whole         window   int16    True   200         200              30.46   PASS
+pr2    compressed  whole         strided  int16    True   1800        1800             48.15   PASS
+pr2    compressed  whole         negstep  int16    True   147456      1632             36.58   FAIL(bytes)
+pr2    compressed  whole         block    int16    True   30720       30720            30.94   PASS
+pr2    compressed  row           entity   float64  True   98304       98304            46.82   PASS
+pr2    compressed  row           window   float64  True   30720       800              39.77   FAIL(bytes)
+pr2    compressed  row           strided  float64  True   98304       7200             51.71   FAIL(bytes)
+pr2    compressed  row           negstep  float64  True   73728       6528             310.32  FAIL(bytes)
+pr2    compressed  row           block    float64  True   15360       15360            31.21   PASS
+pr2    compressed  row           entity   int16    True   24576       24576            39.38   PASS
+pr2    compressed  row           window   int16    True   7680        200              32.35   FAIL(bytes)
+pr2    compressed  row           strided  int16    True   24576       1800             42.97   FAIL(bytes)
+pr2    compressed  row           negstep  int16    True   18432       1632             39.88   FAIL(bytes)
+pr2    compressed  row           block    int16    True   3840        3840             31.45   PASS
+head   contiguous  whole         entity   float64  True   98304       98304            29.39   PASS
+head   contiguous  whole         window   float64  True   800         800              30.77   PASS
+head   contiguous  whole         strided  float64  True   7200        7200             27.88   PASS
+head   contiguous  whole         negstep  float64  True   6528        6528             28.33   PASS
+head   contiguous  whole         block    float64  True   4718592     4718592          86.27   PASS
+head   contiguous  whole         entity   int16    True   24576       24576            27.98   PASS
+head   contiguous  whole         window   int16    True   200         200              30.06   PASS
+head   contiguous  whole         strided  int16    True   1800        1800             27.0    PASS
+head   contiguous  whole         negstep  int16    True   1632        1632             30.13   PASS
+head   contiguous  whole         block    int16    True   1179648     1179648          37.17   PASS
+head   contiguous  row           entity   float64  True   98304       98304            28.47   PASS
+head   contiguous  row           window   float64  True   800         800              26.65   PASS
+head   contiguous  row           strided  float64  True   7200        7200             26.84   PASS
+head   contiguous  row           negstep  float64  True   6528        6528             32.02   PASS
+head   contiguous  row           block    float64  True   98304       98304            28.99   PASS
+head   contiguous  row           entity   int16    True   24576       24576            36.51   PASS
+head   contiguous  row           window   int16    True   200         200              28.26   PASS
+head   contiguous  row           strided  int16    True   1800        1800             28.35   PASS
+head   contiguous  row           negstep  int16    True   1632        1632             31.83   PASS
+head   contiguous  row           block    int16    True   24576       24576            31.72   PASS
+head   chunked     whole         entity   float64  True   98304       98304            49.68   PASS
+head   chunked     whole         window   float64  True   800         800              51.73   PASS
+head   chunked     whole         strided  float64  True   7200        7200             78.12   PASS
+head   chunked     whole         negstep  float64  True   6528        6528             53.35   PASS
+head   chunked     whole         block    float64  True   122880      122880           55.03   PASS
+head   chunked     whole         entity   int16    True   24576       24576            37.68   PASS
+head   chunked     whole         window   int16    True   200         200              31.53   PASS
+head   chunked     whole         strided  int16    True   1800        1800             41.19   PASS
+head   chunked     whole         negstep  int16    True   1632        1632             33.33   PASS
+head   chunked     whole         block    int16    True   30720       30720            31.37   PASS
+head   chunked     row           entity   float64  True   98304       98304            43.46   PASS
+head   chunked     row           window   float64  True   800         800              33.14   PASS
+head   chunked     row           strided  float64  True   7200        7200             41.26   PASS
+head   chunked     row           negstep  float64  True   6528        6528             38.15   PASS
+head   chunked     row           block    float64  True   15360       15360            37.14   PASS
+head   chunked     row           entity   int16    True   24576       24576            43.79   PASS
+head   chunked     row           window   int16    True   200         200              33.29   PASS
+head   chunked     row           strided  int16    True   1800        1800             39.05   PASS
+head   chunked     row           negstep  int16    True   1632        1632             41.8    PASS
+head   chunked     row           block    int16    True   3840        3840             30.47   PASS
+head   compressed  whole         entity   float64  True   98304       98304            43.58   PASS
+head   compressed  whole         window   float64  True   800         800              33.6    PASS
+head   compressed  whole         strided  float64  True   7200        7200             44.33   PASS
+head   compressed  whole         negstep  float64  True   6528        6528             39.1    PASS
+head   compressed  whole         block    float64  True   122880      122880           32.65   PASS
+head   compressed  whole         entity   int16    True   24576       24576            45.16   PASS
+head   compressed  whole         window   int16    True   200         200              33.98   PASS
+head   compressed  whole         strided  int16    True   1800        1800             38.56   PASS
+head   compressed  whole         negstep  int16    True   1632        1632             41.6    PASS
+head   compressed  whole         block    int16    True   30720       30720            32.62   PASS
+head   compressed  row           entity   float64  True   98304       98304            44.45   PASS
+head   compressed  row           window   float64  True   800         800              31.68   PASS
+head   compressed  row           strided  float64  True   7200        7200             43.56   PASS
+head   compressed  row           negstep  float64  True   6528        6528             214.05  PASS
+head   compressed  row           block    float64  True   15360       15360            30.26   PASS
+head   compressed  row           entity   int16    True   24576       24576            37.64   PASS
+head   compressed  row           window   int16    True   200         200              29.82   PASS
+head   compressed  row           strided  int16    True   1800        1800             39.24   PASS
+head   compressed  row           negstep  int16    True   1632        1632             36.46   PASS
+head   compressed  row           block    int16    True   3840        3840             31.06   PASS
+
+PASS = equal values, dtype and shape AND h5py bytes == requested bytes
+base: PASS 6/60  FAIL 54  (equal but extra bytes: 54, wrong values: 0, errors: 0)
+pr2: PASS 36/60  FAIL 24  (equal but extra bytes: 24, wrong values: 0, errors: 0)
+head: PASS 60/60  FAIL 0  (equal but extra bytes: 0, wrong values: 0, errors: 0)
+
+results: /home/exedev/projects/tiled-lazy-hdf5/harness-test/results/matrix.txt .tsv .json
