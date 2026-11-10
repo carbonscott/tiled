@@ -27,6 +27,25 @@ A matrix cell PASSES when the values, dtype and shape equal the oracle (numpy on
 the file read with h5py in the client, never via the server) AND h5py bytes ==
 the bytes of the answer.
 
+The bench scenarios, in the order they run (sizes at --scale full; i, j, k are
+drawn per request from one seeded generator, the same draws for every build):
+
+    scenario              node                  request              answer
+    contiguous            b_contiguous-whole    arr[i]               1 MiB
+    chunks_many           b_chunks_many-whole   arr[i]               1 MiB
+    chunks_one            b_chunks_one-whole    arr[i]               1 MiB
+    compressed            b_compressed-whole    arr[i]               1 MiB
+    row_window            b_contiguous-row      arr[j:j+10, k:k+10]  800 B
+    reversed_contiguous   b_contiguous-whole    arr[i, ::-1]         1 MiB
+    reversed_chunks_many  b_chunks_many-whole   arr[i, ::-1]         1 MiB
+    big_row_window        b_big_contiguous-row  arr[j:j+10, k:k+10]  800 B
+
+b_contiguous, b_chunks_many (chunks span 64 entities), b_chunks_one (one entity
+per chunk) and b_compressed (gzip, one entity per chunk) are 1000 x 256 x 512
+float64. b_big_contiguous is 16 x 4096 x 2048 float64 (64 MiB per entity),
+contiguous. A '-whole' node is the whole stack; a '-row' node is one entity of
+it, registered with the `slice` parameter (the entity in the file's "row" attr).
+
 Layout of W:
     src/              clone of the repository (git worktrees hang off it)
     builds/LABEL/     detached worktree of one build, with its venv in .venv/
@@ -331,6 +350,13 @@ BENCH_SCALES = {
     "small": (200, 128, 256, 32),  # 256 KiB per entity
     "tiny": (40, 32, 64, 8),  # 16 KiB per entity
 }
+# The big_row_window file: entities, H, W (float64), contiguous; each entity is 64x
+# the size of one above, so a registered row costs 64x more to read whole.
+BENCH_BIG_SCALES = {
+    "full": (16, 4096, 2048),  # 64 MiB per entity, 1 GiB
+    "small": (16, 2048, 1024),  # 16 MiB per entity
+    "tiny": (16, 512, 256),  # 1 MiB per entity
+}
 
 
 def middle_row(n: int) -> int:
@@ -436,6 +462,14 @@ def cmd_data(args) -> None:
                 attrs={"layout": layout, "scale": args.scale},
                 force=args.force,
             )
+        write_stack(
+            out / "b_big_contiguous.h5",
+            BENCH_BIG_SCALES[args.scale],
+            "float64",
+            batch=1,  # one 64 MiB entity in memory at a time
+            attrs={"layout": "contiguous", "scale": args.scale},
+            force=args.force,
+        )
 
 
 # ============================================================================
@@ -959,13 +993,21 @@ def cmd_matrix(args) -> None:
 # ============================================================================
 
 BENCH_SCENARIOS = (
-    # name, file stem, node, request
+    # name, file stem, node, request (run in this order; see the module docstring)
     ("contiguous", "b_contiguous", "whole", "entity"),
     ("chunks_many", "b_chunks_many", "whole", "entity"),
     ("chunks_one", "b_chunks_one", "whole", "entity"),
     ("compressed", "b_compressed", "whole", "entity"),
     ("row_window", "b_contiguous", "row", "window10"),
+    ("reversed_contiguous", "b_contiguous", "whole", "entity_reversed"),
+    ("reversed_chunks_many", "b_chunks_many", "whole", "entity_reversed"),
+    ("big_row_window", "b_big_contiguous", "row", "window10"),
 )
+BENCH_REQUESTS = {  # request -> the selection, as the table shows it
+    "entity": "[i]",
+    "entity_reversed": "[i,::-1]",
+    "window10": "[j:j+10,k:k+10]",
+}
 
 
 def resident_pages(path: str) -> tuple[int, int]:
@@ -1043,6 +1085,8 @@ def worker_bench(args) -> None:
             for _ in range(args.requests):
                 if request == "entity":
                     draws.append(rng.randrange(n))
+                elif request == "entity_reversed":
+                    draws.append((rng.randrange(n), slice(None, None, -1)))
                 else:
                     j, k = rng.randrange(H - 10), rng.randrange(Wd - 10)
                     draws.append((slice(j, j + 10), slice(k, k + 10)))
@@ -1051,6 +1095,9 @@ def worker_bench(args) -> None:
                 # The answer, from the formula the file was written with (no file read).
                 if request == "entity":
                     expected = entity_values(arg, arg + 1, H, Wd, node["dtype"])[0]
+                elif request == "entity_reversed":
+                    i, rest = arg
+                    expected = entity_values(i, i + 1, H, Wd, node["dtype"])[0][rest]
                 else:
                     expected = entity_values(
                         node["row"], node["row"] + 1, H, Wd, node["dtype"]
@@ -1079,7 +1126,12 @@ def worker_bench(args) -> None:
             )
     Path(args.out).write_text(
         json.dumps(
-            {"build": args.build, **provenance(W, args.build), "samples": samples}
+            {
+                "build": args.build,
+                **provenance(W, args.build),
+                "nodes": nodes,
+                "samples": samples,
+            }
         )
     )
 
@@ -1110,19 +1162,33 @@ def cmd_bench(args) -> None:
         )
         ran[label] = json.loads(part.read_text())
         samples += ran[label].pop("samples")
+        nodes = ran[label].pop("nodes")  # the same files for every build
 
     def med(xs):
         return statistics.median(xs) if xs else None
 
     lines = [
         (
-            "| scenario | build | requested B/req | median h5py B/req | median warm ms "
-            "| median cold ms | cold evictions verified | values equal |"
+            "| scenario | request | build | requested B/req | median h5py B/req "
+            "| median warm ms | median cold ms | cold evictions verified | values equal |"
         ),
-        "|---|---|---:|---:|---:|---:|---:|---:|",
+        "|---|---|---|---:|---:|---:|---:|---:|---:|",
     ]
-    summary = []
-    for scenario, *_ in BENCH_SCENARIOS:
+    summary, legend = [], []
+    for scenario, stem, reg, request in BENCH_SCENARIOS:
+        desc = f"{stem}-{reg}{BENCH_REQUESTS[request]}"
+        whole = nodes[f"{stem}-whole"]  # the file as a whole
+        legend.append(
+            f"- {scenario}: {stem}.h5 ({whole['layout']}, "
+            f"{'x'.join(map(str, whole['shape']))} {whole['dtype']}, Dask chunks of "
+            f"{'x'.join(str(c[0]) for c in whole['chunks'])}); "
+            + (
+                "node = the whole stack"
+                if reg == "whole"
+                else f"node = row {whole['row']}"
+            )
+            + f"; request arr{BENCH_REQUESTS[request]}"
+        )
         for label in labels:
             s = [
                 x for x in samples if x["build"] == label and x["scenario"] == scenario
@@ -1131,6 +1197,7 @@ def cmd_bench(args) -> None:
             cold = [x for x in s if x["temp"] == "cold"]
             row = {
                 "scenario": scenario,
+                "request": desc,
                 "build": label,
                 "requested_bytes": med([x["requested_bytes"] for x in s]),
                 "h5py_bytes": med([x["h5py_bytes"] for x in s]),
@@ -1143,23 +1210,28 @@ def cmd_bench(args) -> None:
             }
             summary.append(row)
             lines.append(
-                f"| {scenario} | {label} | {fmt_bytes(row['requested_bytes'])} "
+                f"| {scenario} | {desc} | {label} | {fmt_bytes(row['requested_bytes'])} "
                 f"| {fmt_bytes(row['h5py_bytes'])} | {row['warm_ms']:.1f} "
                 f"| {row['cold_ms']:.1f} | {row['verified']}/{row['n']} "
                 f"| {row['equal']}/{row['samples']} |"
             )
     note = (
-        f"\n{args.requests} cold + {args.requests} warm requests per cell; rows (and "
-        f"windows) drawn with seed {args.seed}, the same draws for every build. Builds ran one after "
-        "another, each with its own server; cold = posix_fadvise(DONTNEED) on the file "
-        "then mincore check; warm = the same request again right after. One unrecorded "
-        f"warm-up request per scenario.\n"
+        f"\n{args.requests} cold + {args.requests} warm requests per cell; entities "
+        f"i (and windows j, k) drawn with seed {args.seed}, the same draws for every "
+        "build. Builds ran one after another, each with its own server; cold = "
+        "posix_fadvise(DONTNEED) on the file then mincore check; warm = the same request "
+        "again right after. One unrecorded warm-up request per scenario. A request is "
+        "node[selection]; '-whole' nodes are the whole stack, '-row' nodes one entity "
+        "registered with the `slice` parameter.\n\n" + "\n".join(legend) + "\n"
     )
     md = "\n".join(lines) + "\n" + note + "\n" + provenance_lines(ran) + "\n"
     print("\n" + md)
     (res / "bench.md").write_text(md)
     (res / "bench.json").write_text(
-        json.dumps({"builds": ran, "summary": summary, "samples": samples}, indent=1)
+        json.dumps(
+            {"builds": ran, "nodes": nodes, "summary": summary, "samples": samples},
+            indent=1,
+        )
     )
     print(f"results: {res / 'bench.md'} .json")
 
@@ -1267,7 +1339,8 @@ def main(argv=None) -> None:
         "--scale",
         choices=tuple(BENCH_SCALES),
         default="full",
-        help="bench file size (full = 1000 x 1 MiB float64 per file)",
+        help="bench file size (full = four files of 1000 x 1 MiB float64, "
+        "and b_big_contiguous.h5 of 16 x 64 MiB)",
     )
     sp.add_argument("--force", action="store_true", help="rewrite files that exist")
 
@@ -1289,7 +1362,13 @@ def main(argv=None) -> None:
         help="exit non-zero if this build has any FAIL (default: head)",
     )
 
-    sp = add("bench", cmd_bench, "warm/cold latency per build x scenario")
+    sp = add(
+        "bench",
+        cmd_bench,
+        "warm/cold latency per build x scenario ("
+        + ", ".join(s[0] for s in BENCH_SCENARIOS)
+        + "; the table at the top of this file says what each one requests)",
+    )
     sp.add_argument("--requests", type=int, default=20)
     sp.add_argument("--seed", type=int, default=12345)
     sp.add_argument("--port", type=int)
