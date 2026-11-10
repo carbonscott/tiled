@@ -1,0 +1,434 @@
+[
+ {
+  "dataset_key": "IIYAMA_GARNET_CALORIMETER_EVENTS",
+  "entity_key": "IIYAMA_GARNET_CALORIMETER_EVENTS_29db5c3461a5f",
+  "artifact": "raw",
+  "test_instance_path": "IIYAMA_GARNET_CALORIMETER_EVENTS/IIYAMA_GARNET_CALORIMETER_EVENTS_29db5c3461a5f/raw",
+  "test_instance_url": "https://lcls-data-portal.slac.stanford.edu/tiled-test/api/v1/array/full/IIYAMA_GARNET_CALORIMETER_EVENTS/IIYAMA_GARNET_CALORIMETER_EVENTS_29db5c3461a5f/raw",
+  "shape": [
+   4375,
+   2
+  ],
+  "dtype": "float32",
+  "source_file": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/zenodo/3888910/orig/events_5.h5",
+  "h5_dataset": "/raw",
+  "row": 5555,
+  "source_layout": {
+   "chunks": [
+    1024,
+    4375,
+    2
+   ],
+   "compression": "gzip",
+   "compression_opts": 4,
+   "shuffle": false,
+   "filters": [
+    "gzip"
+   ],
+   "layout": "chunked",
+   "shape": [
+    10000,
+    4375,
+    2
+   ],
+   "dtype": "<f4",
+   "fillvalue": 0.0,
+   "storage_bytes": 161287031,
+   "link": "HardLink"
+  },
+  "slices": {
+   "head": "0:200, 0:2",
+   "middle": "2100:2400:3, 0:2",
+   "tail": "3000:4375, 0:2"
+  },
+  "uid": "29db5c3461a5f4a0",
+  "source_file_relative": "events_5.h5",
+  "data_root": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/zenodo/3888910/orig",
+  "manifest_dir": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/zenodo/3888910/orig/.tilewright/manifests/IIYAMA_GARNET_CALORIMETER_EVENTS",
+  "file_size": 165584140,
+  "file_mtime": "2026-09-16T20:24:49.665337+00:00",
+  "why": "Stacked row 5555 of a (10000, 4375, 2) gzip-chunked dataset (chunk 1024 rows, so the row sits inside chunk 5, 435 rows in): the registered slice is a non-zero, non-chunk-aligned row of a compressed source.",
+  "slices_changed": "tail '4175:4375, 0:2' -> '3000:4375, 0:2' by the test-instance comparison worker: the --ti-only pre-flight (step 44053878.4) read 0 nonzero elements from '4175:4375, 0:2'; rows 3196:4375 of row 5555 are zero padding (last nonzero row 3195; 2939 of 4375 rows nonzero) (h5py on the source, step 44053878.7). The new tail still ends at the last index of axis 0."
+ },
+ {
+  "dataset_key": "IIYAMA_GARNET_CALORIMETER_EVENTS",
+  "entity_key": "IIYAMA_GARNET_CALORIMETER_EVENTS_29db5c3461a5f",
+  "artifact": "cluster",
+  "test_instance_path": "IIYAMA_GARNET_CALORIMETER_EVENTS/IIYAMA_GARNET_CALORIMETER_EVENTS_29db5c3461a5f/cluster",
+  "test_instance_url": "https://lcls-data-portal.slac.stanford.edu/tiled-test/api/v1/array/full/IIYAMA_GARNET_CALORIMETER_EVENTS/IIYAMA_GARNET_CALORIMETER_EVENTS_29db5c3461a5f/cluster",
+  "shape": [
+   128,
+   4
+  ],
+  "dtype": "float32",
+  "source_file": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/zenodo/3888910/orig/events_5.h5",
+  "h5_dataset": "/cluster",
+  "row": 5555,
+  "source_layout": {
+   "chunks": [
+    1024,
+    128,
+    4
+   ],
+   "compression": "gzip",
+   "compression_opts": 4,
+   "shuffle": false,
+   "filters": [
+    "gzip"
+   ],
+   "layout": "chunked",
+   "shape": [
+    10000,
+    128,
+    4
+   ],
+   "dtype": "<f4",
+   "fillvalue": 0.0,
+   "storage_bytes": 4134830,
+   "link": "HardLink"
+  },
+  "slices": {
+   "head": "0:32, 0:4",
+   "middle": "40:80, 0:4",
+   "tail": "56:128, 0:4"
+  },
+  "uid": "29db5c3461a5f4a0",
+  "source_file_relative": "events_5.h5",
+  "data_root": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/zenodo/3888910/orig",
+  "manifest_dir": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/zenodo/3888910/orig/.tilewright/manifests/IIYAMA_GARNET_CALORIMETER_EVENTS",
+  "file_size": 165584140,
+  "file_mtime": "2026-09-16T20:24:49.665337+00:00",
+  "why": "Second artifact of the same entity and row: a small stacked row (128, 4) from a different gzip dataset, so one entity proves two registered slices.",
+  "slices_changed": "tail '96:128, 0:4' -> '56:128, 0:4' by the test-instance comparison worker: the --ti-only pre-flight (step 44053878.4) read 0 nonzero elements from '96:128, 0:4'; rows 65:128 of row 5555 are zero padding (last nonzero row 64; 65 of 128 rows nonzero) (h5py on the source, step 44053878.7). The new tail still ends at the last index of axis 0."
+ },
+ {
+  "dataset_key": "MARONE_NEWBERRY_MEQ_WAVEFORMS",
+  "entity_key": "MARONE_NEWBERRY_MEQ_WAVEFORMS_633bfd241a7ab",
+  "artifact": "rawWave",
+  "test_instance_path": "MARONE_NEWBERRY_MEQ_WAVEFORMS/MARONE_NEWBERRY_MEQ_WAVEFORMS_633bfd241a7ab/rawWave",
+  "test_instance_url": "https://lcls-data-portal.slac.stanford.edu/tiled-test/api/v1/array/full/MARONE_NEWBERRY_MEQ_WAVEFORMS/MARONE_NEWBERRY_MEQ_WAVEFORMS_633bfd241a7ab/rawWave",
+  "shape": [
+   6,
+   4096,
+   3
+  ],
+  "dtype": "float64",
+  "source_file": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/osti/1787546/h5/fieldDatapair0729_nor.h5",
+  "h5_dataset": "/rawWave",
+  "row": 1483,
+  "source_layout": {
+   "chunks": [
+    7,
+    6,
+    4096,
+    3
+   ],
+   "compression": null,
+   "compression_opts": null,
+   "shuffle": false,
+   "filters": [],
+   "layout": "chunked",
+   "shape": [
+    2967,
+    6,
+    4096,
+    3
+   ],
+   "dtype": "<f8",
+   "fillvalue": 0.0,
+   "storage_bytes": 1750597632,
+   "link": "HardLink"
+  },
+  "slices": {
+   "head": "0:2, 0:512, 0:3",
+   "middle": "2:4, 1800:2300:2, 0:3",
+   "tail": "5:6, 3584:4096, 0:3"
+  },
+  "uid": "633bfd241a7abb9c",
+  "source_file_relative": "fieldDatapair0729_nor.h5",
+  "data_root": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/osti/1787546/h5",
+  "manifest_dir": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/osti/1787546/h5/.tilewright/manifests/MARONE_NEWBERRY_MEQ_WAVEFORMS",
+  "file_size": 1751499024,
+  "file_mtime": "2026-09-16T20:21:13.854609+00:00",
+  "why": "Stacked row 1483 of a 4-D (2967, 6, 4096, 3) float64 source, uncompressed chunks of 7 rows (1483 is the LAST row of its chunk): a 3-D entity with a stepped middle slice."
+ },
+ {
+  "dataset_key": "LANGBEHN_HELIUM_NANODROPLET_DIFFRACTION",
+  "entity_key": "LANGBEHN_HELIUM_NANODROPLET_DIFFRACTION_5b8ca7a2cc3ef",
+  "artifact": "ScatImg_raw",
+  "test_instance_path": "LANGBEHN_HELIUM_NANODROPLET_DIFFRACTION/LANGBEHN_HELIUM_NANODROPLET_DIFFRACTION_5b8ca7a2cc3ef/ScatImg_raw",
+  "test_instance_url": "https://lcls-data-portal.slac.stanford.edu/tiled-test/api/v1/array/full/LANGBEHN_HELIUM_NANODROPLET_DIFFRACTION/LANGBEHN_HELIUM_NANODROPLET_DIFFRACTION_5b8ca7a2cc3ef/ScatImg_raw",
+  "shape": [
+   1036,
+   1036
+  ],
+  "dtype": "float32",
+  "source_file": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/osti/1895280/orig/Run_153_267110777.h5",
+  "h5_dataset": "/ScatImg_raw/data",
+  "row": 21,
+  "source_layout": {
+   "chunks": null,
+   "compression": null,
+   "compression_opts": null,
+   "shuffle": false,
+   "filters": [],
+   "layout": "contiguous",
+   "shape": [
+    23,
+    1036,
+    1036
+   ],
+   "dtype": "<f4",
+   "fillvalue": 0.0,
+   "storage_bytes": 98743232,
+   "link": "HardLink"
+  },
+  "slices": {
+   "head": "0:64, 0:256",
+   "middle": "480:560:2, 400:700:3",
+   "tail": "1000:1036, 900:1036"
+  },
+  "uid": "5b8ca7a2cc3ef013",
+  "source_file_relative": "Run_153_267110777.h5",
+  "data_root": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/osti/1895280/orig",
+  "manifest_dir": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/osti/1895280/orig/.tilewright/manifests/LANGBEHN_HELIUM_NANODROPLET_DIFFRACTION",
+  "file_size": 197511696,
+  "file_mtime": "2026-09-16T19:37:12.209817+00:00",
+  "why": "Stacked row 21 of a CONTIGUOUS (23, 1036, 1036) float32 dataset: the exact case PR #2 fixed (no native chunks) composed with a registered row; stepped middle slice."
+ },
+ {
+  "dataset_key": "LECOANET_KELVIN_HELMHOLTZ_BENCHMARK",
+  "entity_key": "LECOANET_KELVIN_HELMHOLTZ_BENCHMARK_4e717e21f09f5",
+  "artifact": "c",
+  "test_instance_path": "LECOANET_KELVIN_HELMHOLTZ_BENCHMARK/LECOANET_KELVIN_HELMHOLTZ_BENCHMARK_4e717e21f09f5/c",
+  "test_instance_url": "https://lcls-data-portal.slac.stanford.edu/tiled-test/api/v1/array/full/LECOANET_KELVIN_HELMHOLTZ_BENCHMARK/LECOANET_KELVIN_HELMHOLTZ_BENCHMARK_4e717e21f09f5/c",
+  "shape": [
+   3072,
+   6144
+  ],
+  "dtype": "float64",
+  "source_file": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/zenodo/5803759/orig/5_2048_1_6.h5",
+  "h5_dataset": "/tasks/c",
+  "row": 1,
+  "source_layout": {
+   "chunks": [
+    1,
+    48,
+    192
+   ],
+   "compression": null,
+   "compression_opts": null,
+   "shuffle": false,
+   "filters": [],
+   "layout": "chunked",
+   "shape": [
+    2,
+    3072,
+    6144
+   ],
+   "dtype": "<f8",
+   "fillvalue": 0.0,
+   "storage_bytes": 301989888,
+   "link": "HardLink"
+  },
+  "slices": {
+   "head": "0:100, 0:400",
+   "middle": "1500:1600, 3000:3500",
+   "tail": "2972:3072, 5744:6144"
+  },
+  "uid": "4e717e21f09f5d4c",
+  "source_file_relative": "5_2048_1_6.h5",
+  "data_root": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/zenodo/5803759/orig",
+  "manifest_dir": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/zenodo/5803759/orig/.tilewright/manifests/LECOANET_KELVIN_HELMHOLTZ_BENCHMARK",
+  "file_size": 1511380032,
+  "file_mtime": "2026-09-16T20:33:14.095348+00:00",
+  "why": "Stacked row 1 (the second, not the first) of a (2, 3072, 6144) float64 dataset with small (1, 48, 192) chunks: a 151 MB entity of which each slice touches only a few chunks; middle crosses chunk boundaries on both axes."
+ },
+ {
+  "dataset_key": "AJO_FRANKLIN_IMPERIAL_VALLEY_DAS",
+  "entity_key": "AJO_FRANKLIN_IMPERIAL_VALLEY_DAS_fd9617a5fec8d",
+  "artifact": "acoustic",
+  "test_instance_path": "AJO_FRANKLIN_IMPERIAL_VALLEY_DAS/AJO_FRANKLIN_IMPERIAL_VALLEY_DAS_fd9617a5fec8d/acoustic",
+  "test_instance_url": "https://lcls-data-portal.slac.stanford.edu/tiled-test/api/v1/array/full/AJO_FRANKLIN_IMPERIAL_VALLEY_DAS/AJO_FRANKLIN_IMPERIAL_VALLEY_DAS_fd9617a5fec8d/acoustic",
+  "shape": [
+   30000,
+   6912
+  ],
+  "dtype": "int16",
+  "source_file": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/osti/2281889/orig/DF__UTC_20201112_000032.602.h5",
+  "h5_dataset": "/Acoustic",
+  "row": null,
+  "source_layout": {
+   "chunks": [
+    76,
+    6912
+   ],
+   "compression": null,
+   "compression_opts": null,
+   "shuffle": false,
+   "filters": [],
+   "layout": "chunked",
+   "shape": [
+    30000,
+    6912
+   ],
+   "dtype": "<i2",
+   "fillvalue": 0,
+   "storage_bytes": 414996480,
+   "link": "HardLink"
+  },
+  "slices": {
+   "head": "0:100, 0:1000",
+   "middle": "14950:15050, 3000:4000",
+   "tail": "29900:30000, 5912:6912"
+  },
+  "uid": "fd9617a5fec8deda",
+  "source_file_relative": "DF__UTC_20201112_000032.602.h5",
+  "data_root": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/osti/2281889/orig",
+  "manifest_dir": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/osti/2281889/orig/.tilewright/manifests/AJO_FRANKLIN_IMPERIAL_VALLEY_DAS",
+  "file_size": 415030456,
+  "file_mtime": "2026-09-16T19:44:52.213706+00:00",
+  "why": "Whole-dataset (row null) int16 2-D, 415 MB, uncompressed (76, 6912) chunks; middle straddles two chunk boundaries (rows 14972 and 15048). Uploaded to the instance in blocks, so it also re-checks a multi-block upload."
+ },
+ {
+  "dataset_key": "MAYNARD_CASELY_BUTANE_DIFFRACTION",
+  "entity_key": "MAYNARD_CASELY_BUTANE_DIFFRACTION_a9b62571aeb9e",
+  "artifact": "hmm_xy",
+  "test_instance_path": "MAYNARD_CASELY_BUTANE_DIFFRACTION/MAYNARD_CASELY_BUTANE_DIFFRACTION_a9b62571aeb9e/hmm_xy",
+  "test_instance_url": "https://lcls-data-portal.slac.stanford.edu/tiled-test/api/v1/array/full/MAYNARD_CASELY_BUTANE_DIFFRACTION/MAYNARD_CASELY_BUTANE_DIFFRACTION_a9b62571aeb9e/hmm_xy",
+  "shape": [
+   6,
+   128,
+   968
+  ],
+  "dtype": "int32",
+  "source_file": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/zenodo/17785191/orig/WBT0104351.nx.hdf",
+  "h5_dataset": "/entry1/data/hmm_xy",
+  "row": null,
+  "source_layout": {
+   "chunks": [
+    1,
+    128,
+    968
+   ],
+   "compression": "gzip",
+   "compression_opts": 6,
+   "shuffle": true,
+   "filters": [
+    "shuffle",
+    "gzip"
+   ],
+   "layout": "chunked",
+   "shape": [
+    6,
+    128,
+    968
+   ],
+   "dtype": "<i4",
+   "fillvalue": 0,
+   "storage_bytes": 472365,
+   "link": "HardLink"
+  },
+  "slices": {
+   "head": "0:1, 0:64, 0:128",
+   "middle": "2:4, 32:96, 400:600",
+   "tail": "5:6, 64:128, 840:968"
+  },
+  "uid": "a9b62571aeb9ee6c",
+  "source_file_relative": "WBT0104351.nx.hdf",
+  "data_root": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/zenodo/17785191/orig",
+  "manifest_dir": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/zenodo/17785191/orig/.tilewright/manifests/MAYNARD_CASELY_BUTANE_DIFFRACTION",
+  "file_size": 762325,
+  "file_mtime": "2026-09-16T20:16:18.726442+00:00",
+  "why": "Whole-dataset int32 3-D (6, 128, 968) with shuffle+gzip (1, 128, 968) chunks, NeXus file of 762 KB: the file copied to the VM for the local dry run."
+ },
+ {
+  "dataset_key": "SCHWENK_RIVERPIXELS",
+  "entity_key": "SCHWENK_RIVERPIXELS_7635b303ab672",
+  "artifact": "gswmo",
+  "test_instance_path": "SCHWENK_RIVERPIXELS/SCHWENK_RIVERPIXELS_7635b303ab672/gswmo",
+  "test_instance_url": "https://lcls-data-portal.slac.stanford.edu/tiled-test/api/v1/array/full/SCHWENK_RIVERPIXELS/SCHWENK_RIVERPIXELS_7635b303ab672/gswmo",
+  "shape": [
+   256,
+   256
+  ],
+  "dtype": "uint8",
+  "source_file": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/osti/1865732/h5/Colville_River_2_2015-07-11_076_011_L8_124.h5",
+  "h5_dataset": "/gswmo",
+  "row": null,
+  "source_layout": {
+   "chunks": [
+    64,
+    128
+   ],
+   "compression": "gzip",
+   "compression_opts": 4,
+   "shuffle": false,
+   "filters": [
+    "gzip"
+   ],
+   "layout": "chunked",
+   "shape": [
+    256,
+    256
+   ],
+   "dtype": "|u1",
+   "fillvalue": 0,
+   "storage_bytes": 4435,
+   "link": "HardLink"
+  },
+  "slices": {
+   "head": "0:32, 0:64",
+   "middle": "100:160:2, 60:200",
+   "tail": "224:256, 192:256"
+  },
+  "uid": "7635b303ab672200",
+  "source_file_relative": "Colville_River_2_2015-07-11_076_011_L8_124.h5",
+  "data_root": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/osti/1865732/h5",
+  "manifest_dir": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/osti/1865732/h5/.tilewright/manifests/SCHWENK_RIVERPIXELS",
+  "file_size": 1187738,
+  "file_mtime": "2026-09-16T20:19:47.183322+00:00",
+  "why": "Whole-dataset uint8 2-D (256, 256), gzip (64, 128) chunks; the entity with the most compressed bytes among the 83 gswmo files (fewest constant runs). Middle crosses chunk boundaries on both axes and is stepped."
+ },
+ {
+  "dataset_key": "BAKER_CODAS_OLIKTOK_POINT",
+  "entity_key": "BAKER_CODAS_OLIKTOK_POINT_787f74a34b72f",
+  "artifact": "strain_rate",
+  "test_instance_path": "BAKER_CODAS_OLIKTOK_POINT/BAKER_CODAS_OLIKTOK_POINT_787f74a34b72f/strain_rate",
+  "test_instance_url": "https://lcls-data-portal.slac.stanford.edu/tiled-test/api/v1/array/full/BAKER_CODAS_OLIKTOK_POINT/BAKER_CODAS_OLIKTOK_POINT_787f74a34b72f/strain_rate",
+  "shape": [
+   360000
+  ],
+  "dtype": "float32",
+  "source_file": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/osti/2205673/h5/CODAS.D4__20211111_040014.846__chn-18100.h5",
+  "h5_dataset": "/data",
+  "row": null,
+  "source_layout": {
+   "chunks": null,
+   "compression": null,
+   "compression_opts": null,
+   "shuffle": false,
+   "filters": [],
+   "layout": "contiguous",
+   "shape": [
+    360000
+   ],
+   "dtype": "<f4",
+   "fillvalue": 0.0,
+   "storage_bytes": 1440000,
+   "link": "HardLink"
+  },
+  "slices": {
+   "head": "0:5000",
+   "middle": "179000:181000:3",
+   "tail": "355000:360000"
+  },
+  "uid": "787f74a34b72f6c5",
+  "source_file_relative": "CODAS.D4__20211111_040014.846__chn-18100.h5",
+  "data_root": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/osti/2205673/h5",
+  "manifest_dir": "/sdf/data/lcls/ds/prj/prjmaiqmag01/scratch/cwang31/tilewright-bench/osti/2205673/h5/.tilewright/manifests/BAKER_CODAS_OLIKTOK_POINT",
+  "file_size": 1454192,
+  "file_mtime": "2026-09-16T20:15:45.863091+00:00",
+  "why": "Whole-dataset 1-D float32 (360000,), CONTIGUOUS: the 1-D rank and the contiguous whole-dataset path."
+ }
+]
