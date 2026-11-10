@@ -1,0 +1,122 @@
+{
+  "pr": "carbonscott/tiled#4 (local branch hdf5-compose-registered-slice)",
+  "head_sha": "421569c45edcb7cfdc8f7b47352a4a2a8cb3700c",
+  "base_sha_pr2": "514dc33a66430b053d1338801da19eb3154b993b",
+  "env": "review clone /home/exedev/projects/tiled-lazy-hdf5/review/{tiled,tiled-pr2}, uv sync --all-extras, Python 3.13, dask 2026.8.0, h5py 3.16.0, numpy 2.5.4, ndindex 1.10.1, hypothesis 6.170.15",
+  "confirmed": [
+    {
+      "title": "A dataset squeezed down to 0-d loses its dtype on read (byte order, fixed-length string width); /array/block and zarr chunk endpoints then serve wrong bytes",
+      "file": "tiled/ndslice.py:579-595 (expand_for_shape squeeze= turns each length-1 slice into an integer) + tiled/adapters/hdf5.py:262-264 (_read returns the h5py read as is)",
+      "line": 590,
+      "failing_input": "HDF5 dataset be = numpy.array([256,258,260], dtype='>i2') or s5 = numpy.array([b'hello',b'ab',b'xyz'], dtype='S5'); registered with parameters {'dataset': name, 'slice': '1:2', 'squeeze': True} (structure shape (), dtype >i2 / S5)",
+      "expected": "adapter.read() returns a 0-d array with the structure dtype (>i2 / S5), as PR #2 did; client.read_block(()) -> 258 / b'ab'; GET /zarr/v2/<key>/0 chunk payload 0102 / 6162000000",
+      "actual": "adapter.read() returns dtype <i2 / S2 (h5py integer-index read returns a native-endian, null-stripped numpy scalar). /api/v1/array/block/<key>?block= (octet-stream) and /zarr/v2|v3 chunks serialize it as is: client.read_block(()) -> array(513, dtype='>i2') (big-endian 258 decoded as 513; >f8 262.0 decoded as 3.12e-317); for S5 -> ValueError: buffer size must be a multiple of element size; zarr chunk payload 0201 / 6162 under a .zarray that declares >i2 / S5. /array/full is correct (router applies numpy.asarray(..., dtype=structure dtype)). Same for vlen strings (served as S5).",
+      "repro_command": "mkdir -p /tmp/r && cd /tmp/r && /home/exedev/projects/tiled-lazy-hdf5/review/tiled/.venv/bin/python -I /home/exedev/projects/tiled-lazy-hdf5/review/harness/repro_squeeze_dtype.py /tmp/r   # and the same with /home/exedev/projects/tiled-lazy-hdf5/review/tiled-pr2/.venv/bin/python",
+      "severity": "medium (silent wrong values over HTTP; narrow: squeeze/registration to a 0-d structure AND non-native byte order or string dtype, AND read via /array/block, client.read_block or zarr; the integer-slice registration path, e.g. slice='1', already had this defect in PR #2 and still has it)",
+      "regression_vs_pr2": true,
+      "suggested_fix": "in HDF5ArrayAdapter._read cast the result to the dataset dtype (numpy.asarray(array, dtype=self._array.dtype)), which also fixes the pre-existing slice='<int>' case"
+    },
+    {
+      "title": "NDSlice.is_expanded now accepts an UNexpanded reversed slice with a negative stop, so compose_slices silently returns a wrong composition (PR #2 raised ValueError)",
+      "file": "tiled/ndslice.py:491-497 (_is_absolute) with _slice_range:107-119 treating any negative stop as 'to the start'",
+      "line": 495,
+      "failing_input": "NDSlice(slice(5, -3, -1))[NDSlice(slice(0, 3))] for an axis of length 10 (numpy: arange(10)[5:-3:-1] is empty)",
+      "expected": "ValueError('Composition of slices with undetermined shape is not supported.') as in PR #2, or a composition equivalent to arr[5:-3:-1][0:3] == []",
+      "actual": "(slice(5, 2, -1),) selecting [5, 4, 3]; NDSlice(slice(5,-3,-1))[NDSlice(0)] -> (5,) instead of an error",
+      "repro_command": "/home/exedev/projects/tiled-lazy-hdf5/review/tiled/.venv/bin/python -c \"from tiled.ndslice import NDSlice; print(NDSlice(slice(5,-3,-1))[NDSlice(slice(0,3))])\"",
+      "severity": "low / latent: no in-tree caller passes such a left operand (HDF5 expands its stencil; brute force over 119,808 ndindex-expanded slices shows _slice_range matches Python semantics for every expanded slice; Zarr stencil and read_block block slices are forward)",
+      "regression_vs_pr2": true
+    }
+  ],
+  "plausible_unconfirmed": [
+    {
+      "title": "Container export paths that call array_adapter.read() directly (tiled/serialization/xarray.py:132 etc.) would write the squeezed 0-d HDF5 node with the narrowed/native dtype (value correct, dtype differs)",
+      "status": "not reproduced; follows from confirmed bug 1"
+    }
+  ],
+  "behaviour_differences_vs_pr2": [
+    {
+      "what": "Negative-step requests/registrations whose start is below -n (e.g. ?slice=-11:2:-1 on 10 rows, -9::-1, ::-1,-3::-1): PR #2 returned wrong data (dask 2026.8.0 mis-normalizes raw reversed slices: 2664 of 14400 raw reversed slices wrong vs numpy; 0 of 60000 ndindex-expanded ones), head returns the numpy result (empty).",
+      "http_visible": "yes on raw HTTP /array/full (PR #2: 200 with 7 wrong elements; head: 200 empty or, for >=2-D empties with octet-stream, 500 from a PRE-EXISTING serializer bug: memoryview(...).cast('B') raises TypeError for any >=2-D empty array, also at PR #2 for ?slice=2:2). The Python client short-circuits empty expected shapes, so it never sees the difference.",
+      "verdict": "fix"
+    },
+    {
+      "what": "Registered structure itself for such slices: from_uris with e.g. slice='-3::-1' on a length-1 axis gives shape (0,...) at head vs (1,...) at PR #2.",
+      "http_visible": "only at registration time (structure)",
+      "verdict": "fix"
+    },
+    {
+      "what": "Error precedence: an invalid request on a node whose structure no longer matches the data raises IndexError at head (request validated against the structure first) where PR #2 raised DataNotReadyError / IncompatibleShapeError / NotImplementedError / TypeError from force_reshape or dask.",
+      "http_visible": "yes, status code on /array/full: head 400 vs PR #2 503/422/500",
+      "verdict": "acceptable"
+    },
+    {
+      "what": "Zero-size registered arrays with a mismatched catalog structure (notready/incompatible): head computes the correct empty registered array and force_reshape's size-equality rule reshapes it (200 empty), PR #2 computed a wrong non-empty array (dask bug) and raised IncompatibleShapeError; occasionally the reverse (dask reshape NotImplementedError on empty arrays at head where PR #2's wrong shape happened to fit).",
+      "http_visible": "yes but only for zero-size structures",
+      "verdict": "edge, follows from the dask fix"
+    },
+    {
+      "what": "Return type of 0-d results: head returns a numpy scalar for a squeezed scalar dataset and 0-d ndarrays for all-integer requests where PR #2 returned numpy scalars (and vice versa).",
+      "http_visible": "no for numeric native dtypes (216 HTTP responses compared byte for byte; scalar /array/full, /array/block, zarr v2/v3 identical). The dtype part is confirmed bug 1.",
+      "verdict": "harmless except bug 1"
+    },
+    {
+      "what": "Non-string slice parameter: slice=0 (int) was ignored by PR #2 (falsy) and is applied by head; a node registered under PR #2 with slice=0 (structure (4,3)) now raises IncompatibleShapeError on read. slice=[1,2] (list) was a fancy row index in PR #2 and is a tuple index (1,2) at head.",
+      "http_visible": "yes (422) if a catalog stores slice as a JSON int/list; tilewright stores str(int); the annotated type is str | NDSlice | None",
+      "verdict": "low"
+    },
+    {
+      "what": "ZarrArrayAdapter (writable arrays) via the rewritten compose_slices: an empty reversed request such as slice(-11, 2, -1) now composes to slice(0,0) and returns [] instead of zarr's NegativeStepError; other negative steps still raise NegativeStepError in both.",
+      "http_visible": "yes, only for empty reversed requests on writable (zarr) arrays",
+      "verdict": "fix"
+    }
+  ],
+  "tests_run": [
+    {
+      "sha": "421569c4",
+      "command": ".venv/bin/python -m pytest tests/test_hdf5.py tests/test_slicer.py tests/test_array.py -q (pytest.ini: -n auto --dist=loadfile)",
+      "summary": "284 passed, 1 warning in 46.73s"
+    },
+    {
+      "sha": "514dc33a",
+      "command": "same, PR #2 tree",
+      "summary": "264 passed, 1 warning in 45.27s"
+    },
+    {
+      "sha": "421569c4",
+      "command": ".venv/bin/python -m pytest tests/test_zarr.py tests/test_writing.py -q",
+      "summary": "186 passed, 1 skipped, 7 warnings in 70.07s"
+    },
+    {
+      "sha": "421569c4",
+      "command": "note: a first run in a clone without git tags (tiled version 0.0.1.dev3634) failed test_update_datasource_with_properties at BOTH head and PR #2; after fetching upstream tags (version 0.2.21.dev91) it passes. Environment artefact, not the PR.",
+      "summary": "1 failed, 283 passed (untagged clone) -> 284 passed (tagged)"
+    },
+    {
+      "sha": "421569c4 vs 514dc33a vs numpy",
+      "command": "SCRATCH=<dir> /home/exedev/projects/tiled-lazy-hdf5/review/tiled/.venv/bin/python /home/exedev/projects/tiled-lazy-hdf5/review/harness/driver.py --examples 2500 --seed S (S = 101,102,103,104 then 201,202,203,204 with h5py byte counting)",
+      "summary": "8 runs x 2500 hypothesis examples (18,188 cases that constructed + 1,812 construction errors compared; 78,142 read() and 31,370 read_block() calls; 21,957 byte-exact checks). Head vs numpy: no value/shape mismatch on any fast-path read; every head!=numpy case is either confirmed bug 1 (369 squeezed big-endian 0-d reads, dtype only), error-mode harness expectations (zero-size reshape semantics shared with PR #2), or dask reshape limitations on empty arrays (shared). h5py bytes read == result nbytes in all 21,957 fast-path checks. Head vs PR #2 differences listed in behaviour_differences_vs_pr2."
+    },
+    {
+      "sha": "421569c4 and 514dc33a",
+      "command": "{py} /home/exedev/projects/tiled-lazy-hdf5/review/harness/compose_prop.py --examples 3000 --seed 7 --mode expanded|raw|zarr [--squeeze]",
+      "summary": "head: 12,000/12,000 compositions equal to numpy (expanded, raw right operand, Zarr stencil, squeeze stencil). PR #2: expanded 141 wrong + 132 refused of 3000; raw 371 wrong + 101 refused; zarr 622 wrong (all reversed slices running to the start of an axis)."
+    },
+    {
+      "sha": "421569c4",
+      "command": "brute force _slice_range(ndindex(s).expand((n,))) vs range(n)[s], n<=12, start/stop in [-15,15]+None, 9 steps",
+      "summary": "119,808 checked, 0 mismatches; is_expanded True for all"
+    },
+    {
+      "sha": "dask 2026.8.0",
+      "command": "dask.array slicing with reversed slices vs numpy, n<=8, several chunkings",
+      "summary": "ndindex-expanded reversed slices: 60,000 checked, 0 wrong; raw reversed slices: 14,400 checked, 2,664 wrong (root of PR #2's wrong results; head's fallback path only passes expanded/composed slices to dask)"
+    },
+    {
+      "sha": "421569c4 vs 514dc33a",
+      "command": "{py} -I /home/exedev/projects/tiled-lazy-hdf5/review/harness/http_compare.py <data> <out.pkl> <storage>; {py} -I /home/exedev/projects/tiled-lazy-hdf5/review/harness/http_byteorder.py <data> <storage>",
+      "summary": "216 HTTP responses (/array/full, /array/block, zarr v2/v3, client.read for 12 registered nodes x 3 Accept types): 192 identical, 24 differ, all of them negative-step requests where PR #2 returned wrong data (see behaviour differences). Big-endian / string 0-d squeezed nodes: confirmed bug 1."
+    }
+  ],
+  "harness": "/home/exedev/projects/tiled-lazy-hdf5/review/harness"
+}

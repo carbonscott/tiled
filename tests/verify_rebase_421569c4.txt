@@ -1,0 +1,9 @@
+[wt-rebased test_hdf5] sha=c6141ed5b568d06222f453a1aacc333a411b33a4 ======================== 71 passed, 1 warning in 57.41s ========================
+[wt-rebased hdf5-touching] sha=c6141ed5b568d06222f453a1aacc333a411b33a4 ====== 196 passed, 53 skipped, 3 xfailed, 29 warnings in 95.25s (0:01:35) ======
+[wt-rebased failures] 0
+[wt-upstream test_hdf5] sha=49fe22daae308237470d739b2f87622319f4e81c ======================== 48 passed, 1 warning in 35.45s ========================
+[wt-upstream hdf5-touching] sha=49fe22daae308237470d739b2f87622319f4e81c ===== 196 passed, 53 skipped, 3 xfailed, 29 warnings in 110.90s (0:01:50) ======
+[wt-upstream failures] 0
+[wt-head test_hdf5] sha=421569c45edcb7cfdc8f7b47352a4a2a8cb3700c ======================== 71 passed, 1 warning in 39.18s ========================
+[wt-head hdf5-touching] sha=421569c45edcb7cfdc8f7b47352a4a2a8cb3700c ====== 193 passed, 50 skipped, 3 xfailed, 29 warnings in 83.34s (0:01:23) ======
+[wt-head failures] 0
